@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mon Trail">
+<meta name="theme-color" content="#0d1110">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Mon Trail</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>:root{
+  --bg:#0d1110; --card:#161b19; --ink:#edf2ee; --muted:#8f9c96; --line:#252e2a; --soft:#1e2522;
+  --accent:#3ddc71; --accent-ink:#04140a; --green:#51cf66; --red:#ff6b6b; --amber:#fcc419; --blue:#74c0fc;
+  --r:18px; --shadow:none;
+  --top:env(safe-area-inset-top,0px); --bot:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+body{padding-bottom:calc(76px + var(--bot))}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{margin:0;letter-spacing:-.01em}
+a{color:var(--blue)}
+
+/* barre du haut */
+.topbar{position:sticky;top:0;z-index:500;display:flex;align-items:center;justify-content:space-between;
+  padding:calc(10px + var(--top)) 18px 10px;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px)}
+.topbar h1{font-size:28px;font-weight:800}
+.icon-btn{width:40px;height:40px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);
+  display:grid;place-items:center;font-size:24px;line-height:1;cursor:pointer}
+.icon-btn svg{width:22px;height:22px}
+
+main{padding:0 14px}
+.view{display:none}
+.view.active{display:block}
+
+/* barre d'onglets */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:600;display:flex;justify-content:space-around;
+  padding:6px 6px calc(6px + var(--bot));background:color-mix(in srgb,var(--card) 92%,transparent);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+.tab{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;
+  font-size:11px;font-weight:600;color:var(--muted);cursor:pointer}
+.tab svg{width:25px;height:25px}
+.tab.active{color:var(--accent)}
+
+/* cartes */
+.card{background:var(--card);border-radius:var(--r);padding:16px;margin:0 0 12px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.section{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:20px 4px 8px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.hero{margin:4px 4px 14px}
+.hero .dow{font-size:15px;color:var(--muted);font-weight:600;text-transform:capitalize}
+.hero .dm{font-size:22px;font-weight:800}
+
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;
+  background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c)}
+.status{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.st-ok{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.st-partial{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)}
+.st-off{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.scard-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.scard-title{font-size:20px;font-weight:800;margin:10px 0 2px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 4px}
+.metrics div{background:var(--soft);border-radius:12px;padding:9px 10px}
+.metrics b{display:block;font-size:20px;font-weight:800;letter-spacing:-.02em}
+.metrics span{font-size:12px;color:var(--muted)}
+.detail{font-size:14px;color:var(--muted);margin-top:8px}
+.route-line{margin-top:10px;font-size:14px;display:flex;align-items:center;gap:8px}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+
+.btn{border:0;border-radius:14px;padding:12px 16px;font-weight:700;cursor:pointer;background:var(--soft);color:var(--ink);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-size:15px}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent)}
+.btn.block{width:100%}
+.btn.sm{padding:8px 12px;font-size:14px;border-radius:12px}
+.btn[disabled]{opacity:.5}
+.grow{flex:1}
+
+.empty{text-align:center;padding:26px 16px}
+.empty .big{font-size:40px}
+.empty p{color:var(--muted);margin:8px 0 16px}
+
+.banner{display:flex;gap:12px;align-items:flex-start;background:color-mix(in srgb,var(--accent) 8%,var(--card));
+  border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:var(--r);padding:14px;margin-bottom:12px;font-size:14px}
+.banner b{display:block;margin-bottom:2px}
+
+/* météo */
+.wx-now{display:flex;align-items:center;gap:12px}
+.wx-now .ico{font-size:40px;line-height:1}
+.wx-now .t{font-size:28px;font-weight:800}
+.hours{display:flex;gap:6px;overflow-x:auto;padding:12px 0 4px;margin:0 -4px;scrollbar-width:none}
+.hours::-webkit-scrollbar{display:none}
+.hour{flex:0 0 auto;width:54px;border-radius:12px;background:var(--soft);padding:7px 0;text-align:center;font-size:12px;border:2px solid transparent;cursor:pointer}
+.hour b{display:block;font-size:14px}
+.hour .e{font-size:20px;display:block;margin:2px 0}
+.hour .p{color:var(--blue);font-weight:600}
+.hour.sel{border-color:var(--accent)}
+.hour.best{background:color-mix(in srgb,var(--green) 14%,var(--soft))}
+.advice{list-style:none;margin:10px 0 0;padding:0}
+.advice li{font-size:14px;padding:6px 0 6px 22px;position:relative}
+.advice li:before{content:"";position:absolute;left:4px;top:12px;width:9px;height:9px;border-radius:50%;background:var(--green)}
+.advice li.warn:before{background:var(--amber)} .advice li.bad:before{background:var(--red)} .advice li.info:before{background:var(--blue)}
+
+/* planning */
+.weeknav{display:flex;align-items:center;justify-content:space-between;margin:4px 0 12px}
+.weeknav button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:20px;cursor:pointer}
+.weeknav .lbl{font-weight:700}
+.day{display:flex;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.day:last-child{border-bottom:0}
+.day .d{width:42px;text-align:center;flex:0 0 auto}
+.day .d small{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)}
+.day .d b{font-size:20px}
+.day.today .d b{color:var(--accent)}
+.day .bar{width:4px;align-self:stretch;border-radius:4px;background:var(--c,var(--line))}
+.day .info{flex:1;min-width:0}
+.day .info .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day .info .s{font-size:13px;color:var(--muted)}
+.list.card{padding:0;overflow:hidden}
+.totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.totals div{text-align:center}
+.totals b{display:block;font-size:18px}
+.totals span{font-size:12px;color:var(--muted)}
+
+/* parcours */
+.map{height:46vh;min-height:260px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);margin-bottom:12px;position:relative;z-index:1}
+.map-tools{position:absolute;right:10px;top:10px;z-index:800;display:flex;flex-direction:column;gap:8px}
+.map-tools button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.5);font-size:16px;font-weight:700;cursor:pointer}
+.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;padding:10px;border-radius:11px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.field{display:block;margin-bottom:12px}
+.field>span{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 5px 2px}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 12px;font-size:16px;-webkit-appearance:none;appearance:none}
+.field textarea{min-height:80px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.progress{font-size:14px;color:var(--muted);display:flex;align-items:center;gap:10px;margin:12px 4px}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite;flex:0 0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.opt{display:flex;gap:12px;cursor:pointer}
+.opt .dot{width:14px;height:14px;border-radius:50%;margin-top:5px;flex:0 0 auto;background:var(--c)}
+.opt.sel{outline:2px solid var(--accent);outline-offset:-1px}
+.opt h4{margin:0 0 4px;font-size:17px}
+.opt .kv{display:flex;gap:14px;font-size:14px;flex-wrap:wrap}
+.opt .kv b{font-weight:800}
+.warn-line{font-size:13px;color:var(--amber);margin-top:6px}
+.bad-line{font-size:13px;color:var(--red);margin-top:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.mini-wx{display:flex;align-items:center;gap:10px;font-size:14px;background:var(--soft);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.mini-wx .e{font-size:24px}
+
+/* comparaison */
+.cmp{margin-top:12px}
+.cmp .row{margin:10px 0}
+.cmp .row .l{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px}
+.cmp .track{height:10px;border-radius:6px;background:var(--soft);overflow:hidden}
+.cmp .fill{height:100%;border-radius:6px;background:var(--green)}
+
+/* feuille modale */
+.sheet-bg{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet-bg.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:901;max-height:92vh;overflow-y:auto;background:var(--bg);
+  border-radius:22px 22px 0 0;padding:10px 16px calc(24px + var(--bot));transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s linear .3s;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.sheet{visibility:hidden}
+.sheet.on{transform:none;visibility:visible;transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 6px}
+.sheet-head{display:flex;justify-content:flex-end;margin-bottom:6px}
+.sheet h2{font-size:22px;font-weight:800;margin-bottom:6px}
+.sheet .close{width:34px;height:34px;border-radius:50%;border:0;background:var(--soft);font-size:16px;cursor:pointer;position:relative;z-index:2}
+.preview{width:100%;max-height:220px;object-fit:contain;border-radius:14px;background:var(--soft);margin:10px 0}
+.pbar{height:8px;border-radius:5px;background:var(--soft);overflow:hidden;margin:8px 0}
+.pbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+details{margin-top:10px}
+details summary{cursor:pointer;color:var(--muted);font-size:14px}
+details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:10px;border-radius:10px;max-height:200px;overflow:auto}
+
+.toast{position:fixed;left:50%;bottom:calc(90px + var(--bot));transform:translateX(-50%) translateY(20px);z-index:1000;background:var(--ink);color:var(--bg);
+  padding:11px 16px;border-radius:14px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+.home-pin{width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.ab-pin{width:28px;height:28px;border-radius:50%;color:#fff;font-weight:800;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4);font-size:14px}
+.leaflet-container{font:inherit;background:var(--soft)}
+.leaflet-control-attribution{font-size:10px}
+.setmap{height:220px;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin:10px 0}
+.res-list{margin-top:8px}
+.res-item{padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);margin-bottom:6px;cursor:pointer;font-size:14px}
+.kv-list{font-size:14px;margin:6px 0}
+.kv-list div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.kv-list div:last-child{border:0}
+.toggle-row{display:flex;gap:8px}
+.toggle-row .btn{flex:1}
+.toggle-row .btn.on{background:var(--accent);color:var(--accent-ink)}
+
+#addrForm input{flex:1;min-width:0}
+
+/* thème sombre : carte, popups, boutons */
+.tiles-dark{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.85) saturate(.55)}
+.leaflet-container{background:#0f1413}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--card);color:var(--ink);box-shadow:0 3px 14px rgba(0,0,0,.6)}
+.leaflet-container a.leaflet-popup-close-button{color:var(--muted)}
+.leaflet-control-attribution{background:rgba(13,17,16,.75)!important;color:var(--muted)}
+.leaflet-control-attribution a{color:var(--blue)}
+.btn{border:1px solid transparent}
+.btn.primary{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent),0 6px 18px color-mix(in srgb,var(--accent) 22%,transparent)}
+.icon-btn{box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 30%,transparent)}
+.field input,.field select,.field textarea,#addrForm input{background:var(--soft)!important;border-color:var(--line)!important;color:var(--ink)}
+.toast{background:var(--accent);color:var(--accent-ink)}
+.tab.active svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent))}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1 id="title">Aujourd'hui</h1>
+  <button class="icon-btn" id="btnAdd" aria-label="Importer une capture Kiprun">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</header>
+
+<main>
+  <section class="view active" id="view-today"></section>
+  <section class="view" id="view-plan"></section>
+  <section class="view" id="view-route">
+    <div class="map" id="map">
+      <div class="map-tools">
+        <button id="mapHome" aria-label="Recentrer">⌖</button>
+        <button id="mapLayer" aria-label="Fond de carte">⛰</button>
+      </div>
+    </div>
+    <div id="routePanel"></div>
+  </section>
+  <section class="view" id="view-settings"></section>
+</main>
+
+<nav class="tabbar">
+  <button class="tab active" data-view="today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    Aujourd'hui</button>
+  <button class="tab" data-view="plan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+    Planning</button>
+  <button class="tab" data-view="route">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l5-12 4 7 3-4 6 9z"/><circle cx="17" cy="5" r="2"/></svg>
+    Parcours</button>
+  <button class="tab" data-view="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+    Réglages</button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="image/*" hidden>
+<input type="file" id="jsonInput" accept="application/json,.json" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>/* Mon Trail — logique pure : lecture des captures, géométrie, relief, météo.
+   Aucune dépendance au DOM : testable dans Node. */
+(function (root) {
+  'use strict';
+  const L = {};
+
+  /* ---------------------------------------------------------------- dates */
+  const pad = n => String(n).padStart(2, '0');
+  L.ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  L.parseYmd = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d, 12); };
+  L.addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  L.mondayOf = d => { const x = new Date(d); x.setHours(12, 0, 0, 0); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return x; };
+  L.atTime = (ymdStr, hhmm) => {
+    const d = L.parseYmd(ymdStr);
+    const [h, m] = String(hhmm || '18:00').split(':').map(Number);
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  };
+
+  const MONTHS = ['janv', 'fev', 'mars', 'avr', 'mai', 'juin', 'juil', 'aout', 'sept', 'oct', 'nov', 'dec'];
+  const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+
+  const strip = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  L.strip = strip;
+
+  /* Texte OCR → minuscules sans accents, guillemets et « x » unifiés */
+  function norm(text) {
+    return strip(text).toLowerCase()
+      .replace(/[’‘`´′]/g, "'")
+      .replace(/[“”″«»]/g, '"')
+      .replace(/''/g, '"')
+      .replace(/[×]/g, 'x')
+      .replace(/[–—]/g, '-')
+      .replace(/ /g, ' ')
+      .replace(/[ \t]+/g, ' ');
+  }
+  L.norm = norm;
+
+  /* ------------------------------------------------------------ durées */
+  // Chaîne → minutes (ou null). Accepte 1h15, 45 min, 45', 1'30, 30", 1:02:33, 12:30
+  L.parseDuration = function (str) {
+    if (str == null || str === '') return null;
+    if (typeof str === 'number') return str;
+    const s = norm(String(str)).trim();
+    let m;
+    if ((m = s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/))) return +m[1] * 60 + +m[2] + +m[3] / 60;
+    if ((m = s.match(/^(\d{1,3}):(\d{2})$/))) return +m[1] + +m[2] / 60;
+    if ((m = s.match(/(\d{1,2})\s?h\s?(\d{1,2})?/))) return +m[1] * 60 + (m[2] ? +m[2] : 0);
+    if ((m = s.match(/(\d{1,2})'(\d{2})/))) return +m[1] + +m[2] / 60;
+    if ((m = s.match(/(\d{1,3})\s?(?:minutes?|min|mn|')/))) return +m[1];
+    if ((m = s.match(/(\d{1,3})\s?(?:secondes?|sec|s\b|")/))) return +m[1] / 60;
+    if ((m = s.match(/^(\d{1,3}(?:[.,]\d+)?)$/))) return parseFloat(m[1].replace(',', '.'));
+    return null;
+  };
+
+  // secondes → "1'30" / "45\"" ; minutes → "1h05" / "45 min"
+  L.fmtSec = sec => {
+    if (sec == null || isNaN(sec)) return '';
+    sec = Math.round(sec);
+    if (sec < 60) return `${sec}"`;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return s ? `${m}'${pad(s)}` : `${m}'`;
+  };
+  L.fmtMin = min => {
+    if (min == null || isNaN(min)) return '';
+    min = Math.round(min);
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${h}h${pad(m)}` : `${h}h`;
+  };
+  // allure min/km décimale → "5'30"
+  L.fmtPace = p => { if (!p) return ''; const m = Math.floor(p), s = Math.round((p - m) * 60); return s === 60 ? `${m + 1}'00` : `${m}'${pad(s)}`; };
+  L.parsePace = str => {
+    if (str == null || str === '') return null;
+    if (typeof str === 'number') return str;
+    const s = norm(str);
+    let m = s.match(/(\d{1,2})\s?['m:h]\s?(\d{2})/);
+    if (m) return +m[1] + +m[2] / 60;
+    m = s.match(/^(\d{1,2}(?:[.,]\d+)?)$/);
+    return m ? parseFloat(m[1].replace(',', '.')) : null;
+  };
+
+  /* --------------------------------------------- jetons (répétitions) */
+  // Lit un jeton distance ou durée au début de s. Retourne {kind, value (m ou s), len}
+  function tokenAt(s) {
+    const lead = s.match(/^[\s(\[]*/)[0].length;
+    const t = s.slice(lead);
+    let m;
+    const r = (kind, value, len) => ({ kind, value, len: lead + len });
+    if ((m = t.match(/^(\d{1,2})'(\d{2})"?/))) return r('time', +m[1] * 60 + +m[2], m[0].length);
+    if ((m = t.match(/^(\d{1,2})\s?h\s?(\d{2})?(?![a-z])/))) return r('time', +m[1] * 3600 + (m[2] ? +m[2] * 60 : 0), m[0].length);
+    if ((m = t.match(/^(\d{1,3})\s?(?:minutes?|min|mn|')/))) return r('time', +m[1] * 60, m[0].length);
+    if ((m = t.match(/^(\d{1,3})\s?(?:secondes?|sec|s(?![a-z])|")/))) return r('time', +m[1], m[0].length);
+    if ((m = t.match(/^(\d{1,2}(?:[.,]\d{1,2})?)\s?km(?![a-z])/))) return r('dist', Math.round(parseFloat(m[1].replace(',', '.')) * 1000), m[0].length);
+    if ((m = t.match(/^(\d{2,4})\s?(?:metres?|m)(?![a-z])/))) return r('dist', +m[1], m[0].length);
+    if ((m = t.match(/^(\d{1,3})(?=\s?[\/-]\s?\d)/))) return r('time', +m[1], m[0].length); // 30/30
+    if ((m = t.match(/^(\d{3,4})(?![\d'".,])/))) return r('dist', +m[1], m[0].length);          // 10 x 400
+    return null;
+  }
+  L._tokenAt = tokenAt;
+
+  function parseReps(t) {
+    // Blocs : 2 x (5 x 400 m)
+    let blocks = 1;
+    const mb = t.match(/(\d)\s?x\s?[(\[]\s?(\d{1,2})\s?x/);
+    if (mb) blocks = +mb[1];
+    const re = /(\d{1,2})\s?x\s?[(\[]?\s?(?=\d)/g;
+    let m, best = null;
+    while ((m = re.exec(t))) {
+      const reps = +m[1];
+      if (reps < 2 || reps > 60) continue;
+      const after = t.slice(m.index + m[0].length);
+      const tok = tokenAt(after);
+      if (!tok) continue;
+      // si c'est un bloc "2 x (5 x ..." on saute au niveau interne
+      if (/^\s?\d{1,2}\s?x/.test(after) ) continue;
+      const out = { reps: reps * (mb && +mb[2] === reps ? blocks : 1) };
+      if (tok.kind === 'dist') out.repDist = tok.value; else out.repTime = tok.value;
+      // récupération juste après : "/30\"", "- 1'30", "r 1'", "recup 1'30"
+      const rest = after.slice(tok.len, tok.len + 60);
+      const mr = rest.match(/^\s?(?:\/|-|r\s?=?|recup(?:eration)?\s?(?:de\s)?:?|avec\s(?:\d+\s)?)\s?/);
+      if (mr) {
+        const rt = tokenAt(rest.slice(mr[0].length));
+        if (rt && rt.kind === 'time') out.recTime = rt.value;
+        else if (rt && rt.kind === 'dist') out.recDist = rt.value;
+      }
+      best = out;
+      break;
+    }
+    if (best && best.recTime == null) {
+      const mr = t.match(/recup(?:eration)?[^0-9\n]{0,18}/);
+      if (mr) {
+        const rt = tokenAt(t.slice(mr.index + mr[0].length));
+        if (rt && rt.kind === 'time' && rt.value <= 600) best.recTime = rt.value;
+      }
+    }
+    return best;
+  }
+  L._parseReps = parseReps;
+
+  /* ------------------------------------------------------- type séance */
+  L.classify = function (t) {
+    const reps = /\d{1,2}\s?x\s?[(\[]?\s?\d/.test(t);
+    if (/\brenfo|\bppg\b|gainage|musculation|circuit training/.test(t) && !/footing|fractionn|endurance/.test(t) && !reps) return 'renfo';
+    if (/\bcotes\b|\ben cote\b|\bde cote\b|\bmontees?\b/.test(t)) return 'cotes';
+    if (/\bseuil|allure specifique|\btempo\b|allure (?:semi|marathon|10 ?km|course|cible)/.test(t) && !/\bvma\b|fractionne court|30\s?[\/-]\s?30/.test(t)) return 'seuil';
+    if (/fractionn|\bvma\b|interval|fartlek|pyramid|\b30\s?[\/-]\s?30\b/.test(t) || reps) return 'fractionne';
+    if (/sortie longue|\blongue\b/.test(t)) return 'sortie_longue';
+    if (/recuperation active|footing de recup|decrassage|footing (?:tres )?leger|\brecup/.test(t)) return 'recup';
+    if (/footing|endurance|\bef\b|course lente|trail|\brun\b|course a pied/.test(t)) return 'footing';
+    if (/\brepos\b/.test(t)) return 'repos';
+    return 'autre';
+  };
+
+  /* -------------------------------------------------------------- date */
+  L.parseDateFr = function (t, ref) {
+    ref = ref || new Date();
+    if (/aujourd'?hui|seance du jour/.test(t)) return L.ymd(ref);
+    if (/\bdemain\b/.test(t)) return L.ymd(L.addDays(ref, 1));
+    let m = t.match(/(?:(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\.?\s)?(\d{1,2})(?:er)?\s(janv|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]*\.?/);
+    if (m) {
+      const key = m[3].startsWith('fev') ? 'fev' : m[3].startsWith('sep') ? 'sept' : m[3];
+      const mi = MONTHS.indexOf(key);
+      if (mi >= 0) {
+        let d = new Date(ref.getFullYear(), mi, +m[2], 12);
+        if (d - ref < -120 * 864e5) d = new Date(ref.getFullYear() + 1, mi, +m[2], 12);
+        else if (d - ref > 240 * 864e5) d = new Date(ref.getFullYear() - 1, mi, +m[2], 12);
+        return L.ymd(d);
+      }
+    }
+    m = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/);
+    if (m) {
+      const wd = DAYS.indexOf(m[1]);
+      const diff = (wd - ref.getDay() + 7) % 7;
+      return L.ymd(L.addDays(ref, diff));
+    }
+    return null;
+  };
+
+  /* --------------------------------------------- capture Kiprun → séance */
+  L.parsePlan = function (text, ref) {
+    const raw = String(text || '');
+    let t = norm(raw);
+    const s = { rawText: raw.trim() };
+
+    // allure (à retirer avant de chercher distances/durées)
+    const paceRe = /(\d{1,2})\s?['m:](\d{2})"?\s?(?:min)?\s?\/\s?km/g;
+    let pm, paces = [];
+    while ((pm = paceRe.exec(t))) paces.push(+pm[1] + +pm[2] / 60);
+    if (paces.length) s.pace = L.fmtPace(Math.min(...paces));
+    t = t.replace(paceRe, ' ').replace(/\d+(?:[.,]\d+)?\s?km\s?\/\s?h/g, ' ');
+
+    s.type = L.classify(t);
+    s.date = L.parseDateFr(t, ref);
+
+    // titre : première ligne qui ressemble à un intitulé de séance
+    const lines = raw.split(/\n+/).map(x => x.trim()).filter(x => x.length > 2);
+    const titleRe = /footing|fractionn|sortie|seuil|c[oô]te|endurance|r[ée]cup|vma|trail|renfo|allure|fartlek|longue/i;
+    const tl = lines.find(x => titleRe.test(x) && x.length < 60 && !/^(objectif|plan|pr[ée]paration)/i.test(x));
+    s.title = tl ? tl.replace(/\s+/g, ' ') : null;
+
+    // D+
+    let m = t.match(/d\s?\+\s?:?\s?(\d{2,4})\s?m?\b/) || t.match(/(\d{2,4})\s?m\s?(?:de\s)?d\s?\+/) ||
+      t.match(/denivele(?:\s?positif)?[\s:]{0,4}\+?\s?(\d{2,4})/) || t.match(/\+\s?(\d{2,4})\s?m\b/);
+    if (m) s.dplus = +m[1];
+
+    // échauffement / retour au calme
+    m = t.match(/echauffement[^0-9\n]{0,20}(\d{1,2}(?:\s?(?:min|mn|')|\s?h))/);
+    if (m) s.warmupMin = Math.round(L.parseDuration(m[1]));
+    m = t.match(/retour au calme[^0-9\n]{0,20}(\d{1,2}(?:\s?(?:min|mn|')))/);
+    if (m) s.cooldownMin = Math.round(L.parseDuration(m[1]));
+
+    // répétitions
+    const reps = parseReps(t);
+    if (reps) Object.assign(s, reps);
+
+    // durée totale
+    m = t.match(/(?:duree(?: totale| estimee)?|temps(?: total| estime)?)[\s:]{0,6}(\d{1,2}\s?h\s?\d{0,2}|\d{1,3}\s?(?:min|mn|'))/);
+    let dur = m ? L.parseDuration(m[1]) : null;
+    if (dur == null) {
+      const durs = [];
+      const dre = /(\d{1,2})\s?h\s?(\d{2})?(?![a-z0-9])|(\d{1,3})\s?(?:minutes?|min|mn|')(?![\d"])/g;
+      let dm;
+      while ((dm = dre.exec(t))) durs.push(dm[1] ? +dm[1] * 60 + (dm[2] ? +dm[2] : 0) : +dm[3]);
+      const big = durs.filter(x => x >= 15 && x <= 400);
+      if (big.length) dur = Math.max(...big);
+    }
+    if (reps) {
+      const repSec = s.repTime || 0, recSec = s.recTime || repSec;
+      const computed = (s.warmupMin || 0) + (s.cooldownMin || 0) + (repSec ? s.reps * (repSec + recSec) / 60 : 0);
+      if (dur == null || (computed > 0 && dur < computed * 0.7)) dur = computed > 0 ? Math.round(computed) : dur;
+    }
+    if (dur != null) s.durationMin = Math.round(dur);
+
+    // distance totale (km), en évitant l'objectif de course
+    m = t.match(/distance(?: totale| estimee)?[\s:]{0,6}(\d{1,3}(?:[.,]\d{1,2})?)\s?km/);
+    if (m) s.distanceKm = parseFloat(m[1].replace(',', '.'));
+    else {
+      const kre = /(\d{1,3}(?:[.,]\d{1,2})?)\s?km(?![a-z])/g;
+      let km, best = null;
+      while ((km = kre.exec(t))) {
+        const before = t.slice(Math.max(0, km.index - 25), km.index);
+        if (/objectif|plan |preparation|marathon|semi|course de|trail de|x\s?$/.test(before)) continue;
+        const v = parseFloat(km[1].replace(',', '.'));
+        if (v > 0 && v < 200 && (best == null || v > best)) best = v;
+      }
+      if (best != null && !(s.repDist && best * 1000 === s.repDist)) s.distanceKm = best;
+    }
+
+    s.notes = lines.filter(x => /echauff|[ée]chauff|retour au calme|r[ée]cup|allure|x\s?\d|côte|cote|consigne|terrain/i.test(x)).slice(0, 6).join(' · ');
+    return s;
+  };
+
+  /* ----------------------------------------- capture Garmin → activité */
+  L.parseActivity = function (text, ref) {
+    const t = norm(text);
+    const a = {};
+    const num = x => parseFloat(String(x).replace(',', '.'));
+    // distance
+    let m = t.match(/distance[\s:]{0,8}(\d{1,3}[.,]\d{1,2})/) || t.match(/(\d{1,3}[.,]\d{1,2})\s?km(?!\s?\/?\s?h)[\s\S]{0,15}distance/) ||
+      t.match(/(\d{1,3}[.,]\d{1,2})\s?km(?!\s?\/\s?h)(?![a-z])/);
+    if (m) a.distanceKm = num(m[1]);
+    // durée : jetons h:mm:ss ou mm:ss qui ne sont pas des allures
+    const times = [];
+    for (const x of t.matchAll(/(?<![\d:])(\d{1,2}:\d{2}(?::\d{2})?)(?![:\d])/g)) {
+      const after = t.slice(x.index + x[0].length, x.index + x[0].length + 10);
+      const before = t.slice(Math.max(0, x.index - 22), x.index);
+      if (/^\s?(?:min)?\s?\/\s?(?:km|100)/.test(after) || /allure|rythme|vitesse/.test(before.slice(-12))) continue;
+      const near = before + ' ' + t.slice(x.index + x[0].length, x.index + x[0].length + 22);
+      times.push({ v: L.parseDuration(x[1]), labelled: /duree|temps|chrono/.test(near), hms: x[1].length > 5 });
+    }
+    const pick = times.find(x => x.labelled && x.v >= 3) || times.find(x => x.hms) ||
+      times.filter(x => x.v >= 8 && x.v < 100).sort((p, q) => q.v - p.v)[0];
+    if (pick) a.durationMin = Math.round(pick.v);
+    // D+
+    m = t.match(/(?:gain d'?altitude|ascension(?: totale)?|denivele(?: positif)?|montee(?: totale)?|d\s?\+)[\s:]{0,8}(\d{1,4})/) ||
+      t.match(/(\d{1,4})\s?m[\s\S]{0,12}(?:gain d'?altitude|ascension|denivele positif|d\s?\+)/);
+    if (m) a.dplus = +m[1];
+    // allure
+    m = t.match(/(\d{1,2})\s?[:'](\d{2})"?\s?(?:min)?\s?\/\s?km/);
+    if (m) a.pace = `${m[1]}'${m[2]}`;
+    // FC
+    m = t.match(/(?:fc|frequence cardiaque)\s?moy\w*\.?[\s:]{0,8}(\d{2,3})/);
+    if (m) a.hr = +m[1];
+    a.date = L.parseDateFr(t, ref);
+    return a;
+  };
+
+  /* ---------------------------------------------- métriques d'une séance */
+  L.isInterval = s => s && (s.type === 'fractionne' || s.type === 'cotes');
+
+  // easy = allure endurance (min/km), fast = allure fractionné. Trail : km-effort = km + D+/100
+  L.metrics = function (s, easy, fast) {
+    easy = easy || 6; fast = fast || 4.75;
+    let dur = s.durationMin || null, dist = s.distanceKm || null;
+    const dplus = s.dplus || 0;
+    if (L.isInterval(s)) {
+      const effPace = s.type === 'cotes' ? fast * 1.35 : fast;
+      const repSec = s.repTime || (s.repDist ? s.repDist / 1000 * effPace * 60 : 0);
+      const recSec = s.recTime != null ? s.recTime : repSec;
+      const wu = s.warmupMin != null ? s.warmupMin : 20, cd = s.cooldownMin != null ? s.cooldownMin : 10;
+      if (!dur) dur = wu + cd + (s.reps ? s.reps * (repSec + recSec) / 60 : 20);
+      if (!dist) {
+        const repKm = s.repDist ? s.repDist / 1000 : repSec / 60 / effPace;
+        const recKm = recSec / 60 / (easy * 1.25);
+        dist = (wu + cd) / easy + (s.reps ? s.reps * (repKm + recKm) : 3);
+      }
+    } else {
+      if (!dist && dur) dist = Math.max(1, dur / easy - dplus / 100);
+      if (!dur && dist) dur = (dist + dplus / 100) * easy;
+    }
+    return {
+      distKm: dist ? Math.round(dist * 10) / 10 : null,
+      durMin: dur ? Math.round(dur) : null,
+      dplus,
+    };
+  };
+
+  // longueur de la ligne droite nécessaire au fractionné (m)
+  L.needLength = function (s, fast) {
+    fast = fast || 4.75;
+    const effPace = s.type === 'cotes' ? fast * 1.35 : fast;
+    let len = s.repDist || (s.repTime ? s.repTime / 60 / effPace * 1000 : 300);
+    return Math.max(80, Math.min(1500, Math.round(len)));
+  };
+
+  /* ------------------------------------------------ comparaison prévu/fait */
+  L.compare = function (s, done, easy, fast) {
+    const p = L.metrics(s, easy, fast);
+    const items = [];
+    if (p.distKm && done.distanceKm) items.push({ key: 'Distance', plan: p.distKm, done: done.distanceKm, unit: 'km', ratio: done.distanceKm / p.distKm });
+    if (p.durMin && done.durationMin) items.push({ key: 'Durée', plan: p.durMin, done: done.durationMin, unit: 'min', ratio: done.durationMin / p.durMin });
+    if (p.dplus > 0 && done.dplus != null) items.push({ key: 'D+', plan: p.dplus, done: done.dplus, unit: 'm', ratio: done.dplus / p.dplus });
+    const preferDur = L.isInterval(s) || !s.distanceKm;
+    const main = (preferDur ? items.find(i => i.key === 'Durée') : items.find(i => i.key === 'Distance')) || items[0];
+    let status = 'unknown';
+    if (main) {
+      const r = main.ratio;
+      const dp = items.find(i => i.key === 'D+');
+      const okD = !dp || dp.ratio >= 0.75;
+      if (r >= 0.88 && r <= 1.25 && okD) status = 'ok';
+      else if (r >= 0.7 && r <= 1.45) status = 'partial';
+      else status = 'off';
+    }
+    return { items, status, main: main ? main.key : null };
+  };
+
+  /* ------------------------------------------------------------ géométrie */
+  const RE = 6371008.8, toR = Math.PI / 180;
+  L.hav = (a, b) => {
+    const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * RE * Math.asin(Math.min(1, Math.sqrt(s)));
+  };
+  L.dest = (p, brg, dist) => {
+    const d = dist / RE, b = brg * toR, la1 = p[0] * toR, lo1 = p[1] * toR;
+    const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(b));
+    const lo2 = lo1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+    return [la2 / toR, ((lo2 / toR + 540) % 360) - 180];
+  };
+  L.pathLen = c => { let d = 0; for (let i = 1; i < c.length; i++) d += L.hav(c[i - 1], c[i]); return d; };
+  L.cumul = c => { const out = [0]; for (let i = 1; i < c.length; i++) out.push(out[i - 1] + L.hav(c[i - 1], c[i])); return out; };
+  L.pointAt = (c, cum, s) => {
+    if (s <= 0) return c[0];
+    if (s >= cum[cum.length - 1]) return c[c.length - 1];
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= s) lo = mid; else hi = mid; }
+    const f = (s - cum[lo]) / ((cum[hi] - cum[lo]) || 1);
+    return [c[lo][0] + (c[hi][0] - c[lo][0]) * f, c[lo][1] + (c[hi][1] - c[lo][1]) * f];
+  };
+  L.resample = (c, n) => {
+    if (c.length < 2) return c.slice();
+    const cum = L.cumul(c), tot = cum[cum.length - 1], out = [];
+    for (let i = 0; i < n; i++) out.push(L.pointAt(c, cum, tot * i / (n - 1)));
+    return out;
+  };
+  L.projector = o => {
+    const kx = Math.cos(o[0] * toR) * RE * toR, ky = RE * toR;
+    return { fwd: p => [(p[1] - o[1]) * kx, (p[0] - o[0]) * ky], inv: q => [o[0] + q[1] / ky, o[1] + q[0] / kx] };
+  };
+  L.pip = (p, ring) => { // p=[lat,lon]
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+      if (((yi > p[0]) !== (yj > p[0])) && (p[1] < (xj - xi) * (p[0] - yi) / ((yj - yi) || 1e-12) + xi)) inside = !inside;
+    }
+    return inside;
+  };
+  L.ringArea = (ring, proj) => {
+    let a = 0; const q = ring.map(proj.fwd);
+    for (let i = 0, j = q.length - 1; i < q.length; j = i++) a += (q[j][0] + q[i][0]) * (q[j][1] - q[i][1]);
+    return Math.abs(a / 2);
+  };
+  L.segDist = (p, a, b) => { // en xy
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const l2 = dx * dx + dy * dy;
+    let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const x = a[0] + t * dx - p[0], y = a[1] + t * dy - p[1];
+    return Math.sqrt(x * x + y * y);
+  };
+  L.bearing = (a, b) => {
+    const la1 = a[0] * toR, la2 = b[0] * toR, dl = (b[1] - a[1]) * toR;
+    const y = Math.sin(dl) * Math.cos(la2), x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dl);
+    return (Math.atan2(y, x) / toR + 360) % 360;
+  };
+  const angDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+  /* --------------------------------------------- D+ depuis un profil */
+  L.elevGain = function (elev) {
+    if (!elev || elev.length < 2) return 0;
+    const sm = elev.map((_, i) => {
+      const a = elev[Math.max(0, i - 1)], b = elev[i], c = elev[Math.min(elev.length - 1, i + 1)];
+      return (a + 2 * b + c) / 4;
+    });
+    let gain = 0, ref = sm[0];
+    for (let i = 1; i < sm.length; i++) {
+      if (sm[i] > ref + 2) { gain += sm[i] - ref; ref = sm[i]; }
+      else if (sm[i] < ref - 2) ref = sm[i];
+    }
+    return Math.round(gain);
+  };
+
+  /* ------------------------------------- espaces verts (Overpass) */
+  const GREEN_LABEL = {
+    park: 'Parc', nature_reserve: 'Réserve naturelle', garden: 'Jardin', recreation_ground: 'Espace de loisirs', common: 'Espace vert',
+    forest: 'Forêt', wood: 'Bois', meadow: 'Prairie', heath: 'Lande', grassland: 'Prairie',
+  };
+  function joinRings(ways) {
+    const segs = ways.filter(w => w && w.length > 1).map(w => w.slice());
+    const rings = [];
+    const key = p => p[0].toFixed(7) + ',' + p[1].toFixed(7);
+    while (segs.length) {
+      let ring = segs.shift();
+      let guard = 0;
+      while (key(ring[0]) !== key(ring[ring.length - 1]) && guard++ < 500) {
+        const end = key(ring[ring.length - 1]);
+        let idx = segs.findIndex(s => key(s[0]) === end);
+        if (idx >= 0) { ring = ring.concat(segs.splice(idx, 1)[0].slice(1)); continue; }
+        idx = segs.findIndex(s => key(s[s.length - 1]) === end);
+        if (idx >= 0) { ring = ring.concat(segs.splice(idx, 1)[0].reverse().slice(1)); continue; }
+        break;
+      }
+      if (ring.length >= 4) rings.push(ring);
+    }
+    return rings;
+  }
+  L.greensFrom = function (elements, home) {
+    const proj = L.projector(home);
+    const out = [];
+    for (const el of elements || []) {
+      const tags = el.tags || {};
+      if (!(tags.leisure || tags.landuse || tags.natural)) continue;
+      if (/^(private|no)$/.test(tags.access || '')) continue;
+      let rings = [];
+      if (el.type === 'way' && el.geometry) {
+        const g = el.geometry.map(p => [p.lat, p.lon]);
+        if (g.length >= 4) rings = [g];
+      } else if (el.type === 'relation' && el.members) {
+        const outers = el.members.filter(m => m.type === 'way' && m.role !== 'inner' && m.geometry).map(m => m.geometry.map(p => [p.lat, p.lon]));
+        rings = joinRings(outers);
+      }
+      if (!rings.length) continue;
+      const area = rings.reduce((a, r) => a + L.ringArea(r, proj), 0);
+      const kind = tags.leisure || tags.landuse || tags.natural;
+      if (area < (tags.name ? 2500 : 6000)) continue;
+      let s = 90, n = -90, w = 180, e = -180;
+      rings.forEach(r => r.forEach(p => { s = Math.min(s, p[0]); n = Math.max(n, p[0]); w = Math.min(w, p[1]); e = Math.max(e, p[1]); }));
+      const g = { id: el.type[0] + el.id, name: tags.name || GREEN_LABEL[kind] || 'Espace vert', named: !!tags.name, kind, tags, rings, area, bbox: [s, w, n, e] };
+      g.inner = L.innerPoint(g);
+      out.push(g);
+    }
+    return out;
+  };
+  L.inGreen = (p, g) => p[0] >= g.bbox[0] && p[0] <= g.bbox[2] && p[1] >= g.bbox[1] && p[1] <= g.bbox[3] && g.rings.some(r => L.pip(p, r));
+  L.innerPoint = g => {
+    const r = g.rings.reduce((a, b) => (b.length > a.length ? b : a));
+    const c = [r.reduce((x, p) => x + p[0], 0) / r.length, r.reduce((x, p) => x + p[1], 0) / r.length];
+    if (L.inGreen(c, g)) return c;
+    const [s, w, n, e] = g.bbox;
+    let best = null, bd = Infinity;
+    for (let i = 1; i < 8; i++) for (let j = 1; j < 8; j++) {
+      const p = [s + (n - s) * i / 8, w + (e - w) * j / 8];
+      if (L.inGreen(p, g)) { const d = L.hav(p, c); if (d < bd) { bd = d; best = p; } }
+    }
+    return best || r[0];
+  };
+
+  /* ------------------------- chemins → chaînes continues (pour le fractionné) */
+  L.buildChains = function (ways) {
+    const W = ways.filter(w => w.geometry && w.geometry.length > 1).map(w => ({
+      id: w.id, tags: w.tags || {}, nodes: w.nodes || [], coords: w.geometry.map(p => [p.lat, p.lon]), used: false,
+    }));
+    const byNode = new Map();
+    const add = (nid, w) => { if (nid == null) return; if (!byNode.has(nid)) byNode.set(nid, []); byNode.get(nid).push(w); };
+    W.forEach(w => { add(w.nodes[0], w); add(w.nodes[w.nodes.length - 1], w); });
+    const chains = [];
+    for (const w of W) {
+      if (w.used) continue;
+      w.used = true;
+      let coords = w.coords.slice(), nodes = w.nodes.slice();
+      const tagsList = [w.tags];
+      for (const dir of ['fwd', 'bwd']) {
+        for (let guard = 0; guard < 50; guard++) {
+          const endNode = dir === 'fwd' ? nodes[nodes.length - 1] : nodes[0];
+          const endC = dir === 'fwd' ? coords[coords.length - 1] : coords[0];
+          const prevC = dir === 'fwd' ? coords[coords.length - 2] : coords[1];
+          const cands = (byNode.get(endNode) || []).filter(x => !x.used);
+          if (!cands.length || cands.length > 2) break; // carrefour : on s'arrête
+          const hd = L.bearing(prevC, endC);
+          let best = null, bestA = 999;
+          for (const c of cands) {
+            const fwd = c.nodes[0] === endNode;
+            const nxt = fwd ? c.coords[1] : c.coords[c.coords.length - 2];
+            const a = angDiff(hd, L.bearing(endC, nxt));
+            if (a < bestA) { bestA = a; best = { c, fwd }; }
+          }
+          if (!best || bestA > 40) break;
+          best.c.used = true;
+          tagsList.push(best.c.tags);
+          // best.fwd : la voie candidate commence au nœud de jonction
+          const cc = best.fwd ? best.c.coords.slice() : best.c.coords.slice().reverse(); // part de la jonction
+          const nn = best.fwd ? best.c.nodes.slice() : best.c.nodes.slice().reverse();
+          if (dir === 'fwd') { coords = coords.concat(cc.slice(1)); nodes = nodes.concat(nn.slice(1)); }
+          else { coords = cc.slice(1).reverse().concat(coords); nodes = nn.slice(1).reverse().concat(nodes); }
+        }
+      }
+      chains.push({ coords, tags: tagsList });
+    }
+    return chains;
+  };
+
+  /* Index spatial simple des routes passantes (distance au trafic) */
+  L.roadIndex = function (roads, home) {
+    const proj = L.projector(home), cell = 150, grid = new Map();
+    const segs = [];
+    for (const r of roads || []) {
+      if (!r.geometry) continue;
+      const pts = r.geometry.map(p => proj.fwd([p.lat, p.lon]));
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i], idx = segs.length;
+        segs.push([a, b]);
+        const x0 = Math.floor(Math.min(a[0], b[0]) / cell), x1 = Math.floor(Math.max(a[0], b[0]) / cell);
+        const y0 = Math.floor(Math.min(a[1], b[1]) / cell), y1 = Math.floor(Math.max(a[1], b[1]) / cell);
+        for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+          const k = x + ',' + y; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(idx);
+        }
+      }
+    }
+    return {
+      dist(p) { // [lat,lon] → m (plafonné à 400)
+        const q = proj.fwd(p), cx = Math.floor(q[0] / cell), cy = Math.floor(q[1] / cell);
+        let best = 400;
+        for (let x = cx - 3; x <= cx + 3; x++) for (let y = cy - 3; y <= cy + 3; y++) {
+          const list = grid.get(x + ',' + y); if (!list) continue;
+          for (const i of list) best = Math.min(best, L.segDist(q, segs[i][0], segs[i][1]));
+        }
+        return best;
+      },
+    };
+  };
+
+  /* Fenêtres droites de longueur len sur les chaînes */
+  L.spotWindows = function (chains, len, opts) {
+    opts = opts || {};
+    const minStraight = opts.minStraight || 0.86, step = opts.step || 40;
+    const out = [];
+    for (const ch of chains) {
+      const c = ch.coords;
+      const cum = L.cumul(c), tot = cum[cum.length - 1];
+      if (tot < len * 0.95) continue;
+      const L2 = Math.min(len, tot);
+      for (let s = 0; s + L2 <= tot + 1; s += step) {
+        const A = L.pointAt(c, cum, s), B = L.pointAt(c, cum, s + L2);
+        const chord = L.hav(A, B);
+        const straight = chord / L2;
+        if (straight < minStraight) continue;
+        const pts = [A];
+        for (let i = 0; i < c.length; i++) if (cum[i] > s && cum[i] < s + L2) pts.push(c[i]);
+        pts.push(B);
+        const mid = L.pointAt(c, cum, s + L2 / 2);
+        out.push({ A, B, mid, coords: pts, len: L2, straight, tags: ch.tags });
+      }
+    }
+    return out;
+  };
+
+  /* Score d'une boucle */
+  L.loopScore = function (r, target) {
+    let sc = Math.abs(r.distance / 1000 - target.distKm) / target.distKm * 1.2;
+    if (target.dplus > 0 && r.dplus != null) sc += Math.abs(r.dplus - target.dplus) / Math.max(target.dplus, 60) * 0.9;
+    sc += (r.overlap || 0) * 0.8;
+    sc -= (r.greenFrac || 0) * (target.greenWeight != null ? target.greenWeight : 0.35);
+    if (r.closedFrac > 0) sc += 1 + r.closedFrac * 3;
+    return sc;
+  };
+
+  L.overlap = function (pts) { // part du parcours emprunté deux fois (aller-retour)
+    const n = pts.length, proj = L.projector(pts[0]), q = pts.map(proj.fwd);
+    let rep = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < i - 6; j++) {
+        const dx = q[i][0] - q[j][0], dy = q[i][1] - q[j][1];
+        if (dx * dx + dy * dy < 25 * 25) { rep++; break; }
+      }
+    }
+    // la fin revient au départ : on ignore les derniers points
+    return Math.max(0, rep - 3) / n;
+  };
+
+  /* ------------------------------------------------------------- météo */
+  const WMO = {
+    0: ['☀️', 'Ciel dégagé'], 1: ['🌤️', 'Peu nuageux'], 2: ['⛅', 'Partiellement nuageux'], 3: ['☁️', 'Couvert'],
+    45: ['🌫️', 'Brouillard'], 48: ['🌫️', 'Brouillard givrant'],
+    51: ['🌦️', 'Bruine légère'], 53: ['🌦️', 'Bruine'], 55: ['🌧️', 'Bruine forte'], 56: ['🌧️', 'Bruine verglaçante'], 57: ['🌧️', 'Bruine verglaçante'],
+    61: ['🌦️', 'Pluie faible'], 63: ['🌧️', 'Pluie'], 65: ['🌧️', 'Forte pluie'], 66: ['🌧️', 'Pluie verglaçante'], 67: ['🌧️', 'Pluie verglaçante'],
+    71: ['🌨️', 'Neige faible'], 73: ['🌨️', 'Neige'], 75: ['❄️', 'Forte neige'], 77: ['🌨️', 'Grésil'],
+    80: ['🌦️', 'Averses'], 81: ['🌧️', 'Averses'], 82: ['⛈️', 'Fortes averses'], 85: ['🌨️', 'Averses de neige'], 86: ['❄️', 'Averses de neige'],
+    95: ['⛈️', 'Orage'], 96: ['⛈️', 'Orage et grêle'], 99: ['⛈️', 'Orage et grêle'],
+  };
+  L.wmo = code => WMO[code] || ['🌡️', '—'];
+
+  // w = réponse Open-Meteo ; renvoie l'index horaire le plus proche de date
+  L.hourIndex = (w, date) => {
+    if (!w || !w.hourly) return -1;
+    const k = `${L.ymd(date)}T${pad(date.getHours())}:00`;
+    return w.hourly.time.indexOf(k);
+  };
+  L.hourAt = (w, i) => !w || i < 0 ? null : {
+    time: w.hourly.time[i], temp: w.hourly.temperature_2m[i], feels: w.hourly.apparent_temperature[i],
+    pop: w.hourly.precipitation_probability[i], rain: w.hourly.precipitation[i], code: w.hourly.weather_code[i],
+    wind: w.hourly.wind_speed_10m[i], gust: w.hourly.wind_gusts_10m[i], isDay: w.hourly.is_day ? w.hourly.is_day[i] : 1,
+  };
+  L.hourPenalty = h => {
+    if (!h) return 999;
+    let p = (h.pop || 0) + (h.rain || 0) * 25;
+    if (h.feels > 24) p += (h.feels - 24) * 5;
+    if (h.feels < 0) p += -h.feels * 3;
+    if (h.gust > 50) p += (h.gust - 50) * 1.5;
+    if (!h.isDay) p += 45;
+    if ([95, 96, 99].includes(h.code)) p += 80;
+    return p;
+  };
+  L.bestHour = (w, ymdStr, from, to) => {
+    from = from == null ? 7 : from; to = to == null ? 21 : to;
+    let best = null;
+    for (let hh = from; hh <= to; hh++) {
+      const d = L.parseYmd(ymdStr); d.setHours(hh, 0, 0, 0);
+      const h = L.hourAt(w, L.hourIndex(w, d));
+      if (!h) continue;
+      const p = L.hourPenalty(h);
+      if (!best || p < best.p) best = { hour: hh, p, h };
+    }
+    return best;
+  };
+  L.advice = function (h, s) {
+    const out = [];
+    if (!h) return out;
+    if ([95, 96, 99].includes(h.code)) out.push({ lvl: 'bad', txt: 'Orage annoncé : évite les forêts, les crêtes et les grands espaces découverts.' });
+    if (h.gust >= 70) out.push({ lvl: 'bad', txt: `Rafales à ${Math.round(h.gust)} km/h : évite les sous-bois (chutes de branches). Certains parcs ferment par vent fort.` });
+    else if (h.gust >= 50) out.push({ lvl: 'warn', txt: `Vent soutenu (rafales ${Math.round(h.gust)} km/h) : commence face au vent, finis vent dans le dos.` });
+    if (h.rain >= 2 || h.pop >= 75) out.push({ lvl: 'warn', txt: 'Pluie probable : sentiers gras et racines glissantes, prévois des chaussures crantées.' });
+    if (h.feels >= 27) out.push({ lvl: 'warn', txt: `Chaleur (ressenti ${Math.round(h.feels)}°) : je favorise l'ombre des parcs et des bois. Pense à l'eau.` });
+    if (h.feels <= 0) out.push({ lvl: 'warn', txt: `Froid (ressenti ${Math.round(h.feels)}°) : attention au gel sur les passerelles et les pavés.` });
+    if (!h.isDay) out.push({ lvl: 'warn', txt: 'Il fera nuit : frontale et parcours éclairé de préférence, les parcs sont souvent fermés.' });
+    if (s && L.isInterval(s) && (h.rain >= 1 || h.pop >= 60)) out.push({ lvl: 'info', txt: 'Pour le fractionné sous la pluie, une allée stabilisée vaut mieux qu’un sentier boueux.' });
+    if (!out.length) out.push({ lvl: 'ok', txt: 'Conditions favorables.' });
+    return out;
+  };
+
+  /* ------------------------------------------------------------- GPX */
+  const esc = s => String(s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  L.gpx = function (name, coords, wpts) {
+    const w = (wpts || []).map(p => `<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${esc(p.name)}</name></wpt>`).join('\n');
+    const pts = coords.map(([la, lo]) => `<trkpt lat="${la.toFixed(6)}" lon="${lo.toFixed(6)}"/>`).join('\n');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Mon Trail" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${esc(name)}</name></metadata>\n${w}\n<trk><name>${esc(name)}</name><trkseg>\n${pts}\n</trkseg></trk>\n</gpx>\n`;
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = L;
+  else root.TL = L;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* Mon Trail — interface */
+(function () {
+  'use strict';
+  const T = window.TL;
+
+  const LIBS = {
+    tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js',
+    suncalc: 'https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js',
+    oh: 'https://cdn.jsdelivr.net/npm/opening_hours@3.15.0/build/opening_hours.js',
+  };
+  const API = {
+    overpass: ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'],
+    osrm: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/',
+    ors: 'https://api.openrouteservice.org/v2/directions/foot-hiking/geojson',
+    meteo: 'https://api.open-meteo.com/v1/forecast',
+    elev: 'https://api.open-meteo.com/v1/elevation',
+    nomSearch: 'https://nominatim.openstreetmap.org/search',
+    nomReverse: 'https://nominatim.openstreetmap.org/reverse',
+    claude: 'https://api.anthropic.com/v1/messages',
+  };
+  const CLAUDE_MODEL = 'claude-haiku-5-5';
+
+  const TYPES = {
+    footing: { label: 'Footing', color: '#51cf66', icon: '🌲' },
+    sortie_longue: { label: 'Sortie longue', color: '#3bc9db', icon: '⛰️' },
+    fractionne: { label: 'Fractionné', color: '#ff922b', icon: '⚡' },
+    cotes: { label: 'Côtes', color: '#ffd43b', icon: '📈' },
+    seuil: { label: 'Seuil / allure', color: '#b197fc', icon: '🎯' },
+    recup: { label: 'Récupération', color: '#74c0fc', icon: '🌿' },
+    renfo: { label: 'Renforcement', color: '#ced4da', icon: '💪' },
+    repos: { label: 'Repos', color: '#adb5bd', icon: '😴' },
+    autre: { label: 'Autre', color: '#adb5bd', icon: '🏃' },
+  };
+  const ROUTE_COLORS = ['#3ddc71', '#4dabf7', '#ff922b'];
+
+  /* ------------------------------------------------------------ état */
+  const KEY = 'montrail.v1';
+  const DEFAULTS = {
+    settings: { home: null, easyPace: 6, fastPace: 4.75, defaultTime: '18:00', router: 'osrm', orsKey: '', reader: 'ocr', claudeKey: '', mapStyle: 'osm' },
+    sessions: [],
+  };
+  let state = load();
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.settings) return { settings: Object.assign({}, DEFAULTS.settings, s.settings), sessions: s.sessions || [] };
+    } catch (e) { /* stockage indisponible */ }
+    return JSON.parse(JSON.stringify(DEFAULTS));
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch (e) { toast('Impossible d’enregistrer sur cet appareil'); }
+  }
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* rien */ }
+
+  const S = () => state.settings;
+  const today = () => T.ymd(new Date());
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const sessionsOn = d => state.sessions.filter(s => s.date === d);
+  const byId = id => state.sessions.find(s => s.id === id);
+  const met = s => T.metrics(s, S().easyPace, S().fastPace);
+
+  /* ---------------------------------------------------------- outils */
+  const $ = (q, el) => (el || document).querySelector(q);
+  const $$ = (q, el) => Array.from((el || document).querySelectorAll(q));
+  const esc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const fmtKm = x => x == null ? '–' : (Math.round(x * 10) / 10).toString().replace('.', ',');
+  const pad = n => String(n).padStart(2, '0');
+  const hhmm = d => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
+  const dateLong = ymd => T.parseYmd(ymd).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  let toastTimer;
+  function toast(msg, ms) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), ms || 2800);
+  }
+  async function fetchJSON(url, opts, ms) {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), ms || 25000);
+    try {
+      const r = await fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal }));
+      if (!r.ok) { const body = await r.text().catch(() => ''); const e = new Error(`HTTP ${r.status}`); e.status = r.status; e.body = body; throw e; }
+      return await r.json();
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('Délai dépassé');
+      throw e;
+    } finally { clearTimeout(tm); }
+  }
+  const loaded = {};
+  function loadScript(src) {
+    if (!loaded[src]) loaded[src] = new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = res; s.onerror = () => { delete loaded[src]; rej(new Error('Chargement impossible (réseau ?)')); };
+      document.head.appendChild(s);
+    });
+    return loaded[src];
+  }
+  function pLimit(n) {
+    let active = 0; const q = [];
+    const next = () => { if (active >= n || !q.length) return; active++; const [fn, res, rej] = q.shift(); fn().then(res, rej).finally(() => { active--; next(); }); };
+    return fn => new Promise((res, rej) => { q.push([fn, res, rej]); next(); });
+  }
+  async function shareFile(name, text, mime) {
+    const file = new File([text], name, { type: mime });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+  }
+
+  /* ------------------------------------------------------- navigation */
+  const TITLES = { today: 'Aujourd’hui', plan: 'Planning', route: 'Parcours', settings: 'Réglages' };
+  let current = 'today';
+  function show(view) {
+    current = view;
+    $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+    $('#title').textContent = TITLES[view];
+    window.scrollTo(0, 0);
+    if (view === 'today') renderToday();
+    if (view === 'plan') renderPlan();
+    if (view === 'route') renderRoute();
+    if (view === 'settings') renderSettings();
+  }
+  $$('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
+  $('#btnAdd').addEventListener('click', () => openImport('plan'));
+
+  /* ---------------------------------------------------------- feuille */
+  function openSheet(html, onMount) {
+    const sh = $('#sheet');
+    sh.innerHTML = `<div class="grab"></div><div class="sheet-head"><button class="close" aria-label="Fermer">✕</button></div>${html}`;
+    sh.scrollTop = 0;
+    $('#sheetBg').classList.add('on'); sh.classList.add('on');
+    $('.close', sh).onclick = closeSheet;
+    if (onMount) onMount(sh);
+  }
+  function closeSheet() { $('#sheet').classList.remove('on'); $('#sheetBg').classList.remove('on'); }
+  $('#sheetBg').addEventListener('click', closeSheet);
+
+  /* ------------------------------------------------- affichage séance */
+  function typeOf(s) { return TYPES[s.type] || TYPES.autre; }
+  function detailLine(s) {
+    const p = [];
+    if (s.reps) {
+      const eff = s.repDist ? `${s.repDist >= 1000 ? fmtKm(s.repDist / 1000) + ' km' : s.repDist + ' m'}` : T.fmtSec(s.repTime);
+      p.push(`${s.reps} × ${eff}`);
+      if (s.recTime) p.push(`récup ${T.fmtSec(s.recTime)}`);
+    }
+    if (s.warmupMin) p.push(`échauff. ${s.warmupMin} min`);
+    if (s.cooldownMin) p.push(`retour au calme ${s.cooldownMin} min`);
+    if (s.pace) p.push(`${s.pace}/km`);
+    return p.join(' · ');
+  }
+  function statusChip(s) {
+    if (s.done && s.done.status) {
+      const map = { ok: ['st-ok', '✓ Réalisée'], partial: ['st-partial', '≈ Partielle'], off: ['st-off', '✗ Écart'], manual: ['st-ok', '✓ Faite'], unknown: ['st-ok', '✓ Faite'] };
+      const [c, l] = map[s.done.status] || map.manual;
+      return `<span class="status ${c}">${l}</span>`;
+    }
+    if (s.date < today()) return `<span class="status st-off">Non validée</span>`;
+    return `<span class="status">À faire</span>`;
+  }
+  function sessionCard(s, opts) {
+    opts = opts || {};
+    const ty = typeOf(s), m = met(s);
+    const det = detailLine(s);
+    const route = s.route ? `<div class="route-line">🗺️ <span>Parcours prévu : <b>${fmtKm(s.route.distance / 1000)} km</b>${s.route.dplus != null ? ` · D+ ${s.route.dplus} m` : ''}${s.route.kind === 'spot' ? ' · spot fractionné' : ''}</span></div>` : '';
+    return `<div class="card scard" data-id="${s.id}">
+      <div class="scard-head"><span class="badge" style="--c:${ty.color}">${ty.icon} ${ty.label}</span>${statusChip(s)}</div>
+      <div class="scard-title">${esc(s.title || ty.label)}</div>
+      ${opts.date ? `<div class="muted small" style="text-transform:capitalize">${dateLong(s.date)}${s.time ? ' · ' + s.time.replace(':', 'h') : ''}</div>` : ''}
+      <div class="metrics">
+        <div><b>${s.distanceKm ? fmtKm(s.distanceKm) : (m.distKm ? '~' + fmtKm(m.distKm) : '–')}</b><span>km</span></div>
+        <div><b>${m.durMin ? T.fmtMin(m.durMin) : '–'}</b><span>durée</span></div>
+        <div><b>${m.dplus || 0}</b><span>m D+</span></div>
+      </div>
+      ${det ? `<div class="detail">${esc(det)}</div>` : ''}
+      ${route}
+      ${opts.actions ? `<div class="actions">
+        <button class="btn primary grow" data-act="route">${T.isInterval(s) ? 'Trouver mon spot' : 'Préparer mon parcours'}</button>
+        <button class="btn" data-act="validate">${s.done ? 'Détails' : 'Valider'}</button>
+      </div>` : ''}
+    </div>`;
+  }
+  function bindCards(root) {
+    $$('.scard', root).forEach(c => {
+      const id = c.dataset.id;
+      c.addEventListener('click', e => {
+        const act = e.target.closest('[data-act]');
+        if (act && act.dataset.act === 'route') { e.stopPropagation(); prepareRoute(id); return; }
+        if (act && act.dataset.act === 'validate') { e.stopPropagation(); openDetail(id); return; }
+        openDetail(id);
+      });
+    });
+  }
+
+  /* -------------------------------------------------------------- météo */
+  let wx = null;
+  async function getWeather() {
+    const h = S().home; if (!h) return null;
+    const key = h.lat.toFixed(3) + ',' + h.lon.toFixed(3);
+    if (wx && wx.key === key && Date.now() - wx.at < 30 * 60e3) return wx.data;
+    const url = `${API.meteo}?latitude=${h.lat.toFixed(4)}&longitude=${h.lon.toFixed(4)}&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=8`;
+    const data = await fetchJSON(url);
+    wx = { key, at: Date.now(), data };
+    return data;
+  }
+  function weatherCardHTML(w, ymd, selHour, s) {
+    const best = T.bestHour(w, ymd, 7, 21);
+    let hours = '';
+    for (let hh = 6; hh <= 22; hh++) {
+      const d = T.parseYmd(ymd); d.setHours(hh, 0, 0, 0);
+      const h = T.hourAt(w, T.hourIndex(w, d));
+      if (!h) continue;
+      const [e] = T.wmo(h.code);
+      hours += `<div class="hour ${hh === selHour ? 'sel' : ''} ${best && best.hour === hh ? 'best' : ''}" data-h="${hh}"><span>${hh}h</span><span class="e">${h.isDay ? e : (h.code <= 2 ? '🌙' : e)}</span><b>${Math.round(h.temp)}°</b><span class="p">${h.pop != null ? h.pop + '%' : ''}</span></div>`;
+    }
+    if (!hours) return `<div class="card"><b>Météo</b><p class="muted small">Prévisions disponibles 7 jours à l’avance.</p></div>`;
+    const d = T.parseYmd(ymd); d.setHours(selHour, 0, 0, 0);
+    const h = T.hourAt(w, T.hourIndex(w, d));
+    let [e, lbl] = h ? T.wmo(h.code) : ['', ''];
+    if (h && !h.isDay && h.code <= 2) e = '🌙';
+    const adv = T.advice(h, s);
+    return `<div class="card">
+      <div class="wx-now"><div class="ico">${e}</div><div><div class="t">${h ? Math.round(h.temp) + '°' : '–'}</div>
+      <div class="muted small">${lbl} à ${selHour}h · ressenti ${h ? Math.round(h.feels) : '–'}° · vent ${h ? Math.round(h.wind) : '–'} km/h</div></div></div>
+      <div class="hours">${hours}</div>
+      ${best ? `<div class="small" style="margin-top:6px">Meilleur créneau : <b>${best.hour}h</b> <span class="muted">(case verte)</span></div>` : ''}
+      <ul class="advice">${adv.map(a => `<li class="${a.lvl}">${esc(a.txt)}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  /* ----------------------------------------------------------- Aujourd'hui */
+  async function renderToday() {
+    const v = $('#view-today'), d = today();
+    const list = sessionsOn(d);
+    const s = list[0];
+    const now = new Date();
+    let html = `<div class="hero"><div class="dow">${now.toLocaleDateString('fr-FR', { weekday: 'long' })}</div><div class="dm">${now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div></div>`;
+    if (!S().home) html += `<div class="banner"><div style="font-size:22px">📍</div><div><b>Indique ton point de départ</b>Il sert aux itinéraires, à la météo et aux horaires des parcs.<div class="actions" style="margin-top:8px"><button class="btn sm primary" id="goHome">Régler</button></div></div></div>`;
+    if (!isStandalone() && !localStorage.getItem('mt.hideInstall')) html += `<div class="banner"><div style="font-size:22px">📲</div><div><b>Installe l’app sur ton iPhone</b>Dans Safari : bouton Partager, puis « Sur l’écran d’accueil ». Fais-le avant d’importer tes séances : l’app installée garde ses propres données.<div class="actions" style="margin-top:8px"><button class="btn sm ghost" id="hideInstall">OK</button></div></div></div>`;
+    if (s) html += sessionCard(s, { actions: true });
+    else html += `<div class="card empty"><div class="big">🗓️</div><b>Pas de séance prévue aujourd’hui</b><p>Ajoute ta séance Kiprun avec une capture d’écran.</p>
+      <button class="btn primary" id="emptyImport">Importer une capture</button>
+      <div style="margin-top:10px"><button class="btn ghost sm" id="freeRun">Sortie libre</button></div></div>`;
+    list.slice(1).forEach(x => { html += sessionCard(x, { actions: true }); });
+    html += `<div id="todayWx"></div>`;
+    const upcoming = state.sessions.filter(x => x.date > d).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+    if (upcoming.length) {
+      html += `<div class="section">À venir</div><div class="card list">${upcoming.map(dayRow).join('')}</div>`;
+    }
+    v.innerHTML = html;
+    bindCards(v);
+    $$('.day', v).forEach(r => r.addEventListener('click', () => r.dataset.id && openDetail(r.dataset.id)));
+    const gh = $('#goHome', v); if (gh) gh.onclick = () => show('settings');
+    const hi = $('#hideInstall', v); if (hi) hi.onclick = () => { try { localStorage.setItem('mt.hideInstall', '1'); } catch (e) { /* */ } renderToday(); };
+    const ei = $('#emptyImport', v); if (ei) ei.onclick = () => openImport('plan');
+    const fr = $('#freeRun', v); if (fr) fr.onclick = () => { route.sessionId = ''; show('route'); };
+
+    if (S().home) {
+      const box = $('#todayWx', v);
+      box.innerHTML = `<div class="card"><div class="progress"><div class="spin"></div>Météo…</div></div>`;
+      try {
+        const w = await getWeather();
+        const selHour = s && s.time ? +s.time.split(':')[0] : +(S().defaultTime || '18:00').split(':')[0];
+        box.innerHTML = weatherCardHTML(w, d, selHour, s);
+        renderTodayHoursBind(box, w, d, s);
+        const sel = $('.hour.sel', box); if (sel) sel.parentNode.scrollLeft = sel.offsetLeft - 80;
+      } catch (e) { box.innerHTML = `<div class="card muted small">Météo indisponible (${esc(e.message)}).</div>`; }
+    }
+  }
+  function renderTodayHoursBind(box, w, d, s) {
+    $$('.hour', box).forEach(el => el.onclick = () => {
+      const hh = +el.dataset.h;
+      if (s) { s.time = `${pad(hh)}:00`; save(); }
+      box.innerHTML = weatherCardHTML(w, d, hh, s);
+      renderTodayHoursBind(box, w, d, s);
+    });
+  }
+  function isStandalone() { return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
+
+  /* ------------------------------------------------------------ Planning */
+  let weekStart = T.mondayOf(new Date());
+  function dayRow(s) {
+    const ty = typeOf(s), m = met(s);
+    const d = T.parseYmd(s.date);
+    const summary = [m.distKm ? `~${fmtKm(m.distKm)} km` : '', m.durMin ? T.fmtMin(m.durMin) : '', m.dplus ? `D+ ${m.dplus} m` : ''].filter(Boolean).join(' · ');
+    return `<div class="day ${s.date === today() ? 'today' : ''}" data-id="${s.id}" style="--c:${ty.color}">
+      <div class="d"><small>${d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '')}</small><b>${d.getDate()}</b></div>
+      <div class="bar"></div>
+      <div class="info"><div class="t">${ty.icon} ${esc(s.title || ty.label)}</div><div class="s">${summary}${s.reps ? ' · ' + esc(detailLine(s).split(' · ').slice(0, 1)[0]) : ''}</div></div>
+      ${statusChip(s)}</div>`;
+  }
+  function renderPlan() {
+    const v = $('#view-plan');
+    const days = [...Array(7)].map((_, i) => T.ymd(T.addDays(weekStart, i)));
+    const end = T.addDays(weekStart, 6);
+    const fmt = d => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    let rows = '', pd = 0, dd = 0, pp = 0, dp = 0;
+    for (const d of days) {
+      const ss = sessionsOn(d);
+      if (!ss.length) {
+        const dt = T.parseYmd(d);
+        rows += `<div class="day ${d === today() ? 'today' : ''}" data-date="${d}"><div class="d"><small>${dt.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '')}</small><b>${dt.getDate()}</b></div><div class="bar"></div><div class="info"><div class="s">Repos</div></div></div>`;
+      }
+      ss.forEach(s => {
+        rows += dayRow(s);
+        const m = met(s); pd += m.distKm || 0; pp += m.dplus || 0;
+        if (s.done) { dd += s.done.distanceKm || 0; dp += s.done.dplus || 0; }
+      });
+    }
+    v.innerHTML = `<div class="weeknav"><button id="wPrev" aria-label="Semaine précédente">‹</button><div class="lbl">${fmt(weekStart)} – ${fmt(end)}</div><button id="wNext" aria-label="Semaine suivante">›</button></div>
+      <div class="card list">${rows}</div>
+      <div class="card totals"><div><b>${fmtKm(pd)}</b><span>km prévus</span></div><div><b>${fmtKm(dd)}</b><span>km faits</span></div><div><b>${Math.round(pp)} / ${Math.round(dp)}</b><span>D+ prévu / fait</span></div></div>
+      <div class="actions"><button class="btn primary grow" id="pImport">Importer une capture</button><button class="btn" id="pManual">Ajouter</button></div>`;
+    $('#wPrev').onclick = () => { weekStart = T.addDays(weekStart, -7); renderPlan(); };
+    $('#wNext').onclick = () => { weekStart = T.addDays(weekStart, 7); renderPlan(); };
+    $('#pImport').onclick = () => openImport('plan');
+    $('#pManual').onclick = () => openEditor({ id: uid(), date: today(), type: 'footing' }, true);
+    $$('.day', v).forEach(r => r.addEventListener('click', () => {
+      if (r.dataset.id) openDetail(r.dataset.id);
+      else openEditor({ id: uid(), date: r.dataset.date, type: 'footing' }, true);
+    }));
+  }
+
+  /* ------------------------------------------------------- détail séance */
+  function cmpHTML(s) {
+    if (!s.done) return '';
+    const c = T.compare(s, s.done, S().easyPace, S().fastPace);
+    if (!c.items.length) return `<p class="muted small">Séance marquée comme faite.</p>`;
+    return `<div class="cmp">${c.items.map(i => {
+      const pct = Math.round(i.ratio * 100);
+      const col = i.ratio >= 0.88 && i.ratio <= 1.25 ? 'var(--green)' : i.ratio >= 0.7 ? 'var(--amber)' : 'var(--red)';
+      const f = v => i.unit === 'km' ? fmtKm(v) + ' km' : i.unit === 'min' ? T.fmtMin(v) : Math.round(v) + ' m';
+      return `<div class="row"><div class="l"><span>${i.key}</span><span><b>${f(i.done)}</b> / ${f(i.plan)} · ${pct} %</span></div><div class="track"><div class="fill" style="width:${clamp(pct, 3, 100)}%;background:${col}"></div></div></div>`;
+    }).join('')}${s.done.pace ? `<p class="small muted">Allure moyenne ${esc(s.done.pace)}/km${s.done.hr ? ` · FC moy. ${s.done.hr}` : ''}</p>` : ''}</div>`;
+  }
+  function openDetail(id) {
+    const s = byId(id); if (!s) return;
+    const raw = s.rawText ? `<details><summary>Texte lu sur la capture</summary><pre>${esc(s.rawText)}</pre></details>` : '';
+    openSheet(`${sessionCard(s, { date: true })}
+      ${s.notes ? `<div class="card small">${esc(s.notes)}</div>` : ''}
+      ${s.done ? `<div class="card"><b>Séance réalisée</b>${cmpHTML(s)}</div>` : ''}
+      <div class="actions">
+        <button class="btn primary block" id="dRoute">${T.isInterval(s) ? 'Trouver mon spot de fractionné' : 'Préparer mon parcours'}</button>
+        <button class="btn block" id="dValidate">📸 ${s.done ? 'Revalider' : 'Valider'} avec ma capture Garmin</button>
+        <div class="toggle-row" style="width:100%">
+          <button class="btn" id="dDone">${s.done ? 'Dévalider' : '✓ Marquer faite'}</button>
+          <button class="btn" id="dEdit">Modifier</button>
+        </div>
+        <button class="btn danger block" id="dDel">Supprimer</button>
+      </div>${raw}`, sh => {
+      $('#dRoute', sh).onclick = () => { closeSheet(); prepareRoute(id); };
+      $('#dValidate', sh).onclick = () => openImport('activity', id);
+      $('#dEdit', sh).onclick = () => openEditor(Object.assign({}, s), false);
+      $('#dDone', sh).onclick = () => {
+        if (s.done) delete s.done; else s.done = { status: 'manual', at: Date.now() };
+        save(); refresh(); openDetail(id);
+      };
+      $('#dDel', sh).onclick = () => {
+        if (!confirm('Supprimer cette séance ?')) return;
+        state.sessions = state.sessions.filter(x => x.id !== id); save(); closeSheet(); refresh();
+      };
+    });
+  }
+  function refresh() { show(current); }
+
+  /* ----------------------------------------------------------- éditeur */
+  const typeOptions = sel => Object.entries(TYPES).map(([k, t]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${t.icon} ${t.label}</option>`).join('');
+  function editorFields(s, p) {
+    p = p || '';
+    const v = x => x == null ? '' : esc(x);
+    return `<div class="grid2"><label class="field"><span>Date</span><input type="date" name="${p}date" value="${v(s.date)}"></label>
+      <label class="field"><span>Heure prévue</span><input type="time" name="${p}time" value="${v(s.time || S().defaultTime)}"></label></div>
+      <label class="field"><span>Type</span><select name="${p}type">${typeOptions(s.type)}</select></label>
+      <label class="field"><span>Intitulé</span><input name="${p}title" value="${v(s.title)}" placeholder="ex. Fractionné court"></label>
+      <div class="grid3"><label class="field"><span>Durée</span><input name="${p}durationMin" inputmode="text" value="${s.durationMin ? T.fmtMin(s.durationMin) : ''}" placeholder="1h05"></label>
+      <label class="field"><span>Distance km</span><input name="${p}distanceKm" inputmode="decimal" value="${s.distanceKm ? fmtKm(s.distanceKm) : ''}" placeholder="—"></label>
+      <label class="field"><span>D+ m</span><input name="${p}dplus" inputmode="numeric" value="${v(s.dplus)}" placeholder="0"></label></div>
+      <div class="grid2"><label class="field"><span>Échauffement (min)</span><input name="${p}warmupMin" inputmode="numeric" value="${v(s.warmupMin)}"></label>
+      <label class="field"><span>Retour au calme (min)</span><input name="${p}cooldownMin" inputmode="numeric" value="${v(s.cooldownMin)}"></label></div>
+      <div class="grid3"><label class="field"><span>Répétitions</span><input name="${p}reps" inputmode="numeric" value="${v(s.reps)}" placeholder="10"></label>
+      <label class="field"><span>Effort</span><input name="${p}effort" value="${s.repDist ? s.repDist + ' m' : s.repTime ? T.fmtSec(s.repTime) : ''}" placeholder="400 m ou 1'30"></label>
+      <label class="field"><span>Récup</span><input name="${p}recup" value="${s.recTime ? T.fmtSec(s.recTime) : ''}" placeholder="1'30"></label></div>
+      <label class="field"><span>Allure cible (/km)</span><input name="${p}pace" value="${v(s.pace)}" placeholder="5'30"></label>
+      <label class="field"><span>Consignes</span><textarea name="${p}notes">${v(s.notes)}</textarea></label>`;
+  }
+  function readEditor(root, base, p) {
+    p = p || '';
+    const g = n => { const el = root.querySelector(`[name="${p}${n}"]`); return el ? el.value.trim() : ''; };
+    const num = x => { if (x === '') return null; const n = parseFloat(x.replace(',', '.')); return isNaN(n) ? null : n; };
+    const s = Object.assign({}, base);
+    s.date = g('date') || today(); s.time = g('time') || null; s.type = g('type'); s.title = g('title') || null;
+    const dm = T.parseDuration(g('durationMin')); s.durationMin = dm != null ? Math.round(dm) : null;
+    s.distanceKm = num(g('distanceKm')); s.dplus = num(g('dplus'));
+    s.warmupMin = num(g('warmupMin')); s.cooldownMin = num(g('cooldownMin')); s.reps = num(g('reps'));
+    const eff = T.norm(g('effort'));
+    s.repDist = null; s.repTime = null;
+    if (eff) {
+      const tk = T._tokenAt(eff.replace(/^(\d+)$/, (_, n) => +n >= 100 ? n + ' m' : n + '"'));
+      if (tk && tk.kind === 'dist') s.repDist = tk.value; else if (tk) s.repTime = tk.value;
+    }
+    const rc = T.parseDuration(g('recup')); s.recTime = rc != null ? Math.round(rc * 60) : null;
+    s.pace = g('pace') || null; s.notes = g('notes') || null;
+    return s;
+  }
+  function openEditor(s, isNew) {
+    openSheet(`<h2>${isNew ? 'Nouvelle séance' : 'Modifier la séance'}</h2><form id="edForm" style="margin-top:12px">${editorFields(s)}
+      <button class="btn primary block" type="submit">Enregistrer</button></form>
+      ${s.rawText ? `<details><summary>Texte lu sur la capture</summary><pre>${esc(s.rawText)}</pre></details>` : ''}`, sh => {
+      $('#edForm', sh).addEventListener('submit', e => {
+        e.preventDefault();
+        const ns = readEditor(sh, s);
+        const i = state.sessions.findIndex(x => x.id === ns.id);
+        if (i >= 0) state.sessions[i] = ns; else state.sessions.push(ns);
+        save(); closeSheet(); toast('Séance enregistrée'); refresh();
+      });
+    });
+  }
+
+  /* ------------------------------------------------ lecture des captures */
+  async function prepImage(file, maxSide) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Image illisible')); i.src = url; });
+      const k = Math.min(1, (maxSide || 2000) / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  }
+  function forOCR(canvas) { // niveaux de gris, inversion si capture en mode sombre
+    const ctx = canvas.getContext('2d');
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height), px = d.data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 4) { const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; px[i] = px[i + 1] = px[i + 2] = g; sum += g; }
+    const inv = sum / (px.length / 4) < 115;
+    if (inv) for (let i = 0; i < px.length; i += 4) { px[i] = px[i + 1] = px[i + 2] = 255 - px[i]; }
+    ctx.putImageData(d, 0, 0);
+    return canvas;
+  }
+  async function ocr(file, onProg) {
+    await loadScript(LIBS.tesseract);
+    const canvas = forOCR(await prepImage(file, 2200));
+    const worker = await window.Tesseract.createWorker('fra', 1, Object.assign({}, window.__TESS_OPTS || {}, {
+      logger: m => { if (m.status === 'recognizing text') onProg(0.35 + m.progress * 0.65, 'Lecture du texte…'); else if (/load|init/.test(m.status)) onProg(Math.min(0.33, (m.progress || 0) * 0.33), 'Préparation de la lecture (1re fois : quelques secondes)…'); },
+    }));
+    try { const { data } = await worker.recognize(canvas); return data.text; }
+    finally { worker.terminate(); }
+  }
+  async function claudeRead(file, mode) {
+    const c = await prepImage(file, 1568);
+    const b64 = c.toDataURL('image/jpeg', 0.85).split(',')[1];
+    const now = new Date();
+    const prompt = mode === 'plan'
+      ? `Capture d'écran d'une app de plan d'entraînement course/trail (Kiprun Pacer). Aujourd'hui : ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${T.ymd(now)}).
+Extrais chaque séance visible. Convertis les dates relatives (Aujourd'hui, Demain, jours de la semaine) en dates. Réponds UNIQUEMENT avec ce JSON :
+{"sessions":[{"date":"YYYY-MM-DD"|null,"title":string,"type":"footing"|"sortie_longue"|"fractionne"|"cotes"|"seuil"|"recup"|"renfo"|"repos"|"autre","durationMin":number|null,"distanceKm":number|null,"dplus":number|null,"warmupMin":number|null,"cooldownMin":number|null,"reps":number|null,"repDist":number|null (mètres),"repTime":number|null (secondes),"recTime":number|null (secondes),"pace":"m'ss"|null,"notes":string (consignes en une ou deux phrases)}]}`
+      : `Capture d'écran d'une activité de course (Garmin Connect). Réponds UNIQUEMENT avec ce JSON : {"distanceKm":number|null,"durationMin":number|null,"dplus":number|null (gain d'altitude en m),"pace":"m'ss"|null,"hr":number|null,"date":"YYYY-MM-DD"|null}. Aujourd'hui : ${T.ymd(now)}.`;
+    const res = await fetchJSON(API.claude, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': S().claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 2000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } }, { type: 'text', text: prompt }] }] }),
+    }, 60000);
+    const txt = (res.content || []).map(x => x.text || '').join('');
+    const j = txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
+    return JSON.parse(j);
+  }
+
+  function openImport(mode, sessionId) {
+    const isPlan = mode === 'plan';
+    openSheet(`<h2>${isPlan ? 'Importer une séance Kiprun' : 'Valider avec Garmin'}</h2>
+      <p class="muted small">${isPlan ? 'Fais une capture d’écran de ta séance dans Kiprun Pacer (le détail de la séance), puis choisis-la ici.' : 'Fais une capture du résumé de ton activité dans Garmin Connect (distance, temps, gain d’altitude), puis choisis-la ici.'}</p>
+      <button class="btn primary block" id="pick" style="margin-top:8px">📷 Choisir la capture</button>
+      ${isPlan ? '<button class="btn ghost block" id="manual" style="margin-top:8px">Saisir à la main</button>' : '<button class="btn ghost block" id="manual" style="margin-top:8px">Saisir les chiffres à la main</button>'}
+      <div id="impProg" hidden><img class="preview" id="impPrev" alt=""><div class="pbar"><i id="impBar"></i></div><div class="small muted" id="impLbl">Lecture…</div></div>
+      <p class="small muted" style="margin-top:14px">${S().reader === 'claude' && S().claudeKey ? 'Lecture par Claude (clé API).' : 'Lecture sur ton téléphone (gratuit). Vérifie les champs avant d’enregistrer.'}</p>`, sh => {
+      $('#manual', sh).onclick = () => isPlan ? openEditor({ id: uid(), date: today(), type: 'footing' }, true) : openActivityForm(sessionId, {});
+      $('#pick', sh).onclick = () => {
+        const fi = $('#fileInput'); fi.value = '';
+        fi.onchange = async () => {
+          const file = fi.files && fi.files[0]; if (!file) return;
+          $('#impProg', sh).hidden = false; $('#pick', sh).disabled = true;
+          const prevUrl = URL.createObjectURL(file); $('#impPrev', sh).src = prevUrl;
+          const prog = (p, l) => { $('#impBar', sh).style.width = Math.round(p * 100) + '%'; if (l) $('#impLbl', sh).textContent = l; };
+          try {
+            if (S().reader === 'claude' && S().claudeKey) {
+              prog(0.3, 'Claude lit la capture…');
+              try {
+                const j = await claudeRead(file, mode);
+                prog(1, 'Terminé');
+                if (isPlan) return reviewSessions((j.sessions || []).map(x => normalizeSession(x)));
+                return openActivityForm(sessionId, j);
+              } catch (e) { toast('Claude indisponible, lecture locale…'); }
+            }
+            const text = await ocr(file, prog);
+            prog(1, 'Terminé');
+            if (isPlan) {
+              const s = normalizeSession(T.parsePlan(text, new Date()));
+              if (!s.date) s.date = today();
+              reviewSessions([s]);
+            } else {
+              const a = T.parseActivity(text, new Date()); a.rawText = text;
+              openActivityForm(sessionId, a);
+            }
+          } catch (e) {
+            $('#impLbl', sh).textContent = 'Lecture impossible : ' + ((e && e.message) || String(e)); $('#pick', sh).disabled = false;
+          } finally { setTimeout(() => URL.revokeObjectURL(prevUrl), 2000); }
+        };
+        fi.click();
+      };
+    });
+  }
+  function normalizeSession(x) {
+    const s = { id: uid() };
+    ['date', 'title', 'type', 'durationMin', 'distanceKm', 'dplus', 'warmupMin', 'cooldownMin', 'reps', 'repDist', 'repTime', 'recTime', 'pace', 'notes', 'rawText'].forEach(k => { if (x[k] != null && x[k] !== '') s[k] = x[k]; });
+    if (!TYPES[s.type]) s.type = T.classify(T.norm((s.title || '') + ' ' + (s.notes || '')));
+    if (!s.date) s.date = today();
+    s.time = S().defaultTime;
+    return s;
+  }
+  function reviewSessions(list) {
+    if (!list.length) { toast('Aucune séance trouvée sur la capture'); return; }
+    if (list.length === 1) {
+      const s = list[0];
+      const ex = sessionsOn(s.date)[0];
+      openEditor(s, true);
+      if (ex) toast(`Il y a déjà une séance le ${dateLong(s.date)} : elle sera ajoutée en plus`, 3500);
+      return;
+    }
+    openSheet(`<h2>${list.length} séances trouvées</h2><p class="muted small">Décoche celles que tu ne veux pas ajouter. Tu pourras les modifier ensuite.</p>
+      <div id="revList">${list.map((s, i) => `<label class="card" style="display:flex;gap:12px;align-items:flex-start"><input type="checkbox" checked data-i="${i}" style="width:22px;height:22px;margin-top:2px">
+      <div><b style="text-transform:capitalize">${dateLong(s.date)}</b><div>${typeOf(s).icon} ${esc(s.title || typeOf(s).label)}</div><div class="small muted">${esc(detailLine(s))}</div></div></label>`).join('')}</div>
+      <button class="btn primary block" id="revAdd">Ajouter au planning</button>`, sh => {
+      $('#revAdd', sh).onclick = () => {
+        const keep = $$('input[type=checkbox]', sh).filter(c => c.checked).map(c => list[+c.dataset.i]);
+        keep.forEach(s => state.sessions.push(s)); save(); closeSheet();
+        toast(`${keep.length} séance(s) ajoutée(s)`); refresh();
+      };
+    });
+  }
+  function openActivityForm(sessionId, a) {
+    const s = byId(sessionId);
+    const v = x => x == null ? '' : esc(x);
+    openSheet(`<h2>Activité réalisée</h2><p class="muted small">Vérifie les chiffres lus, puis valide.</p>
+      <form id="actForm" style="margin-top:10px"><div class="grid3">
+        <label class="field"><span>Distance km</span><input name="distanceKm" inputmode="decimal" value="${a.distanceKm != null ? fmtKm(a.distanceKm) : ''}"></label>
+        <label class="field"><span>Durée</span><input name="durationMin" value="${a.durationMin != null ? T.fmtMin(a.durationMin) : ''}" placeholder="1h02"></label>
+        <label class="field"><span>D+ m</span><input name="dplus" inputmode="numeric" value="${v(a.dplus)}"></label></div>
+        <div class="grid2"><label class="field"><span>Allure moy.</span><input name="pace" value="${v(a.pace)}" placeholder="5'45"></label>
+        <label class="field"><span>FC moy.</span><input name="hr" inputmode="numeric" value="${v(a.hr)}"></label></div>
+        <button class="btn primary block" type="submit">Valider la séance</button></form>
+      ${a.rawText ? `<details><summary>Texte lu sur la capture</summary><pre>${esc(a.rawText)}</pre></details>` : ''}`, sh => {
+      $('#actForm', sh).addEventListener('submit', e => {
+        e.preventDefault();
+        const g = n => sh.querySelector(`[name=${n}]`).value.trim();
+        const num = x => { const n = parseFloat(String(x).replace(',', '.')); return isNaN(n) ? null : n; };
+        const done = { distanceKm: num(g('distanceKm')), durationMin: (() => { const d = T.parseDuration(g('durationMin')); return d != null ? Math.round(d) : null; })(), dplus: num(g('dplus')), pace: g('pace') || null, hr: num(g('hr')), at: Date.now() };
+        if (!s) { toast('Séance introuvable'); return; }
+        done.status = T.compare(s, done, S().easyPace, S().fastPace).status;
+        if (done.status === 'unknown') done.status = 'manual';
+        s.done = done; save(); refresh(); openDetail(s.id);
+        toast(done.status === 'ok' ? 'Séance réalisée 👏' : done.status === 'partial' ? 'Séance partiellement réalisée' : 'Validée');
+      });
+    });
+  }
+
+  /* ============================================================ CARTE */
+  let map = null, layers = {}, baseLayers = {};
+  function ensureMap() {
+    if (map || !window.L) return map;
+    map = L.map('map', { zoomControl: false, attributionControl: true });
+    baseLayers.osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', className: 'tiles-dark' });
+    baseLayers.topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, subdomains: 'abc', attribution: '© OpenStreetMap, SRTM · OpenTopoMap (CC-BY-SA)' });
+    (baseLayers[S().mapStyle] || baseLayers.osm).addTo(map);
+    layers.greens = L.layerGroup().addTo(map);
+    layers.routes = L.layerGroup().addTo(map);
+    layers.spots = L.layerGroup().addTo(map);
+    layers.home = L.layerGroup().addTo(map);
+    const h = S().home;
+    map.setView(h ? [h.lat, h.lon] : [46.6, 2.4], h ? 14 : 5);
+    drawHome();
+    $('#mapHome').onclick = () => { const hh = S().home; if (hh) map.setView([hh.lat, hh.lon], 15); };
+    $('#mapLayer').onclick = () => {
+      const next = S().mapStyle === 'topo' ? 'osm' : 'topo';
+      map.removeLayer(baseLayers[S().mapStyle] || baseLayers.osm); baseLayers[next].addTo(map);
+      S().mapStyle = next; save(); toast(next === 'topo' ? 'Carte topographique (relief)' : 'Carte standard');
+    };
+    return map;
+  }
+  function drawHome() {
+    if (!map) return;
+    layers.home.clearLayers();
+    const h = S().home; if (!h) return;
+    L.marker([h.lat, h.lon], { icon: L.divIcon({ className: '', html: '<div class="home-pin"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(layers.home).bindTooltip('Départ');
+  }
+  function drawGreens(greens) {
+    layers.greens.clearLayers();
+    greens.forEach(g => {
+      const closed = g.status === 'closed' || g.status === 'closes';
+      L.polygon(g.rings, { color: closed ? '#ff6b6b' : '#8ce99a', weight: 1, fillOpacity: closed ? 0.16 : 0.08, dashArray: closed ? '4 4' : null, interactive: true })
+        .bindPopup(`<b>${esc(g.name)}</b><br>${esc(g.label || (g.status === 'none' ? 'horaires non renseignés' : ''))}`)
+        .addTo(layers.greens);
+    });
+  }
+  const abIcon = (txt, col) => L.divIcon({ className: '', html: `<div class="ab-pin" style="background:${col}">${txt}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+
+  /* ======================================================== DONNÉES CARTO */
+  const areaCache = new Map();
+  function greenSel(a) {
+    return `way["leisure"~"^(park|nature_reserve|recreation_ground|common|garden)$"]${a};
+ relation["leisure"~"^(park|nature_reserve|recreation_ground)$"]${a};
+ way["landuse"~"^(forest|recreation_ground|meadow|village_green)$"]${a};
+ relation["landuse"~"^(forest|recreation_ground)$"]${a};
+ way["natural"~"^(wood|heath|grassland|scrub)$"]${a};
+ relation["natural"~"^(wood|heath)$"]${a};`;
+  }
+  async function overpass(q) {
+    let last;
+    for (const url of API.overpass) {
+      try { return await fetchJSON(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 60000); }
+      catch (e) { last = e; }
+    }
+    throw new Error('Les données de carte OpenStreetMap ne répondent pas (' + (last ? last.message : '?') + '). Réessaie dans quelques minutes.');
+  }
+  async function fetchArea(H, R, withPaths) {
+    const key = `${H[0].toFixed(3)},${H[1].toFixed(3)},${Math.round(R / 250)},${withPaths}`;
+    if (areaCache.has(key)) return areaCache.get(key);
+    const a = `(around:${Math.round(R)},${H[0].toFixed(5)},${H[1].toFixed(5)})`;
+    let q = `[out:json][timeout:50];\n(\n ${greenSel(a)}\n)->.g;\n.g out geom qt;`;
+    if (withPaths) {
+      q += `\n.g map_to_area->.ga;
+(
+ way["highway"~"^(footway|path|track|cycleway|pedestrian|bridleway)$"]["footway"!~"^(sidewalk|crossing)$"]["access"!~"^(private|no)$"](area.ga);
+ way["highway"~"^(path|track|bridleway)$"]["access"!~"^(private|no)$"]${a};
+);
+out geom qt;
+way["highway"~"^(motorway|trunk|primary|secondary|tertiary)(_link)?$"](around:${Math.round(R + 300)},${H[0].toFixed(5)},${H[1].toFixed(5)});
+out geom qt;`;
+    }
+    const j = await overpass(q);
+    const els = j.elements || [];
+    const major = /^(motorway|trunk|primary|secondary|tertiary)(_link)?$/;
+    const res = {
+      greens: T.greensFrom(els.filter(e => !(e.tags && e.tags.highway)), H),
+      paths: els.filter(e => e.type === 'way' && e.tags && e.tags.highway && !major.test(e.tags.highway)),
+      roads: els.filter(e => e.type === 'way' && e.tags && major.test(e.tags.highway || '')),
+    };
+    areaCache.set(key, res);
+    return res;
+  }
+  async function ensureOH() {
+    if (window.opening_hours) return true;
+    try { await loadScript(LIBS.suncalc); await loadScript(LIBS.oh); return !!window.opening_hours; }
+    catch (e) { return false; }
+  }
+  function parkStatus(tags, start, end, H) {
+    const v = (tags.opening_hours || '').trim();
+    if (!v) return { status: 'none', label: 'horaires non renseignés' };
+    if (v === '24/7') return { status: 'open', label: 'ouvert 24h/24' };
+    if (!window.opening_hours) return { status: 'unknown', label: 'horaires : ' + v };
+    try {
+      const oh = new window.opening_hours(v, { lat: H[0], lon: H[1], address: { country_code: 'fr', state: '' } }, { mode: 0 });
+      const a = oh.getState(start), b = oh.getState(end), nx = oh.getNextChange(start);
+      if (a && b) return { status: 'open', label: nx ? `ouvert jusqu’à ${hhmm(nx)}` : 'ouvert' };
+      if (a && !b) return { status: 'closes', label: `ferme à ${nx ? hhmm(nx) : '?'} (avant la fin de ta séance)` };
+      return { status: 'closed', label: nx ? `fermé à cette heure (ouvre à ${hhmm(nx)})` : 'fermé à cette heure' };
+    } catch (e) { return { status: 'unknown', label: 'horaires : ' + v }; }
+  }
+  async function elevations(points) {
+    const out = [];
+    for (let i = 0; i < points.length; i += 100) {
+      const ch = points.slice(i, i + 100);
+      const url = `${API.elev}?latitude=${ch.map(p => p[0].toFixed(5)).join(',')}&longitude=${ch.map(p => p[1].toFixed(5)).join(',')}`;
+      const j = await fetchJSON(url);
+      out.push(...j.elevation);
+      if (i + 100 < points.length) await sleep(150);
+    }
+    return out;
+  }
+  async function routeVia(points, avoid) {
+    if (S().router === 'ors' && S().orsKey) {
+      const body = { coordinates: points.map(p => [p[1], p[0]]), instructions: false };
+      if (avoid && avoid.length) body.options = { avoid_polygons: { type: 'MultiPolygon', coordinates: avoid } };
+      try {
+        const j = await fetchJSON(API.ors, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: S().orsKey }, body: JSON.stringify(body) }, 30000);
+        const f = j.features[0];
+        return { coords: f.geometry.coordinates.map(c => [c[1], c[0]]), distance: f.properties.summary.distance };
+      } catch (e) {
+        if (avoid && avoid.length && e.status === 400) return routeVia(points, null);
+        if (e.status === 401 || e.status === 403) throw new Error('Clé OpenRouteService refusée');
+        throw e;
+      }
+    }
+    const coords = points.map(p => p[1].toFixed(6) + ',' + p[0].toFixed(6)).join(';');
+    const j = await fetchJSON(`${API.osrm}${coords}?overview=full&geometries=geojson&continue_straight=false`, null, 30000);
+    if (!j.routes || !j.routes.length) throw new Error('Pas d’itinéraire');
+    return { coords: j.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), distance: j.routes[0].distance };
+  }
+
+  /* ===================================================== GÉNÉRATION BOUCLES */
+  async function generateLoops(o, progress) {
+    const H = [o.home.lat, o.home.lon];
+    const end = new Date(o.start.getTime() + o.durMin * 60000);
+    const info = [];
+    progress('Recherche des parcs et espaces verts…');
+    const R = clamp(o.distKm * 1000 / 3, 1500, 7000);
+    let greens = [];
+    try { greens = (await fetchArea(H, R, false)).greens; }
+    catch (e) { info.push('Parcs non disponibles : itinéraire calculé sans les horaires d’ouverture.'); }
+    if (greens.length && !(await ensureOH())) info.push('Horaires des parcs non lus (réseau).');
+    greens.forEach(g => Object.assign(g, parkStatus(g.tags, o.start, end, H)));
+    drawGreens(greens);
+    const isClosed = g => g.status === 'closed' || g.status === 'closes';
+    const open = greens.filter(g => !isClosed(g)), closed = greens.filter(isClosed);
+    const anchors = open.filter(g => g.area >= 15000).map(g => ({ p: g.inner, w: Math.log10(g.area) / 5, id: g.id }));
+
+    let hills = [];
+    if (o.dplus > 0) {
+      progress('Analyse du relief autour de chez toi…');
+      const pts = [H];
+      for (const f of [0.1, 0.17, 0.24, 0.32, 0.4]) for (let b = 0; b < 360; b += 20) pts.push(T.dest(H, b, o.distKm * 1000 * f));
+      try {
+        const el = await elevations(pts);
+        const h0 = el[0];
+        hills = pts.slice(1).map((p, i) => ({ p, gain: el[i + 1] - h0, id: 'h' + i })).filter(x => x.gain > 6).sort((a, b) => b.gain - a.gain).slice(0, 20);
+        const maxGain = Math.max(0, ...el.map(x => x - h0));
+        if (maxGain < o.dplus / 4) info.push(`Relief limité autour de chez toi (bosse max ≈ ${Math.round(maxGain)} m) : le D+ visé sera difficile à atteindre en une boucle, pense aux répétitions de montées.`);
+      } catch (e) { info.push('Relief non disponible.'); }
+    }
+    const greenW = o.night ? 0.05 : o.heat ? 0.6 : 0.35;
+    const r0 = o.distKm * 1000 / (2 * Math.PI * 1.3);
+    const build = (brg, r) => {
+      const C = T.dest(H, brg, r), used = new Set(), wps = [];
+      const pool = hills.map(x => ({ p: x.p, s: 1 + x.gain / 40, id: x.id }))
+        .concat(anchors.map(a => ({ p: a.p, s: a.w * (o.dplus > 0 ? 0.7 : 1.2) * (o.heat ? 1.5 : 1) * (o.night ? 0.2 : 1), id: a.id })));
+      for (const k of [1, 2, 3]) {
+        let P = T.dest(C, (brg + 180 + 90 * k) % 360, r);
+        const snapR = r * 0.45;
+        let best = null, bs = 0.15;
+        for (const c of pool) {
+          if (used.has(c.id)) continue;
+          const d = T.hav(P, c.p); if (d > snapR) continue;
+          const sc = c.s * (1 - 0.5 * d / snapR);
+          if (sc > bs) { bs = sc; best = c; }
+        }
+        if (best) { P = best.p; used.add(best.id); }
+        wps.push(P);
+      }
+      return [H].concat(wps, [H]);
+    };
+    const avoid = closed.flatMap(g => g.rings.map(r => [r.map(p => [p[1], p[0]])]));
+    const bearings = [0, 45, 90, 135, 180, 225, 270, 315];
+    const lim = pLimit(2);
+    const cands = [];
+    let n = 0, lastErr = null;
+    await Promise.all(bearings.map(b => lim(async () => {
+      let r = r0, res = null;
+      for (let it = 0; it < 3; it++) {
+        try { res = await routeVia(build(b, r), avoid); } catch (e) { lastErr = e; res = null; break; }
+        const ratio = res.distance / 1000 / o.distKm;
+        if (Math.abs(ratio - 1) < 0.07) break;
+        r = r / clamp(ratio, 0.5, 2);
+      }
+      n++; progress(`Calcul des boucles… ${n}/${bearings.length}`);
+      if (res) cands.push(Object.assign(res, { bearing: b }));
+    })));
+    if (!cands.length) throw new Error(lastErr && /refusée/.test(lastErr.message) ? lastErr.message : 'Le service d’itinéraires ne répond pas pour l’instant (' + (lastErr ? lastErr.message : '?') + '). Réessaie dans quelques minutes.');
+    for (const c of cands) {
+      const pts = T.resample(c.coords, 120);
+      c.overlap = T.overlap(pts);
+      const counts = new Map();
+      let inG = 0;
+      for (const p of pts) { const g = open.find(gg => T.inGreen(p, gg)); if (g) { inG++; counts.set(g.name, (counts.get(g.name) || 0) + 1); } }
+      c.greenFrac = inG / pts.length;
+      c.parks = [...counts.entries()].filter(([nm]) => nm && !/^(Espace vert|Prairie|Lande)$/.test(nm)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+      const cl = closed.filter(g => pts.some(p => T.inGreen(p, g)));
+      c.closedFrac = cl.length ? pts.filter(p => cl.some(g => T.inGreen(p, g))).length / pts.length : 0;
+      c.closedNames = cl.map(g => g.name + ' (' + g.label + ')');
+    }
+    const tgt = { distKm: o.distKm, dplus: o.dplus, greenWeight: greenW };
+    cands.sort((a, b) => T.loopScore(a, Object.assign({}, tgt, { dplus: 0 })) - T.loopScore(b, Object.assign({}, tgt, { dplus: 0 })));
+    // on écarte les quasi-doublons
+    const uniq = [];
+    for (const c of cands) { if (uniq.every(u => Math.abs(u.distance - c.distance) > 150 || T.hav(T.resample(u.coords, 5)[2], T.resample(c.coords, 5)[2]) > 300)) uniq.push(c); }
+    const top = uniq.slice(0, o.dplus > 0 ? 5 : 4);
+    progress('Calcul du dénivelé…');
+    for (const c of top) {
+      try { const k = clamp(Math.round(c.distance / 60), 40, 200); c.profile = await elevations(T.resample(c.coords, k)); c.dplus = T.elevGain(c.profile); }
+      catch (e) { c.dplus = null; }
+    }
+    top.sort((a, b) => T.loopScore(a, tgt) - T.loopScore(b, tgt));
+    return { routes: top.slice(0, 3), greens, info };
+  }
+
+  /* =================================================== SPOT DE FRACTIONNÉ */
+  async function findSpots(o, progress) {
+    const H = [o.home.lat, o.home.lon];
+    const end = new Date(o.start.getTime() + o.durMin * 60000);
+    const R = clamp((o.warmKm || 2) * 1000 * 1.5, 1500, 4000);
+    progress('Recherche des allées et chemins…');
+    const area = await fetchArea(H, R, true);
+    if (area.greens.length) await ensureOH();
+    area.greens.forEach(g => Object.assign(g, parkStatus(g.tags, o.start, end, H)));
+    drawGreens(area.greens);
+    progress('Analyse des lignes droites…');
+    await sleep(30);
+    const chains = T.buildChains(area.paths);
+    let wins = T.spotWindows(chains, o.len, { minStraight: o.hill ? 0.75 : 0.86, step: Math.max(25, o.len / 8) });
+    if (wins.length < 3) wins = T.spotWindows(chains, o.len, { minStraight: 0.7, step: Math.max(25, o.len / 8) });
+    if (!wins.length) throw new Error(`Aucune ligne de ${o.len} m trouvée dans les parcs et chemins proches. Essaie une longueur plus courte.`);
+    const roads = T.roadIndex(area.roads, H);
+    const isClosed = g => g.status === 'closed' || g.status === 'closes';
+    const cand = [];
+    for (const w of wins) {
+      w.green = area.greens.find(g => T.inGreen(w.mid, g)) || null;
+      if (w.green && isClosed(w.green)) continue;
+      w.road = Math.min(roads.dist(w.A), roads.dist(w.mid), roads.dist(w.B));
+      w.home = T.hav(H, w.mid);
+      const calm = clamp((w.road - 25) / 150, 0, 1);
+      const prox = o.warmKm ? 1 - clamp(Math.abs(w.home / 1000 - o.warmKm) / Math.max(o.warmKm, 1), 0, 1) : 1 - clamp(w.home / R, 0, 1);
+      const tg = w.tags.find(t => t.surface) || w.tags[0] || {};
+      w.surface = tg.surface || null; w.hw = tg.highway; w.wayName = (w.tags.find(t => t.name) || {}).name || null;
+      w.pre = calm * 0.4 + (w.green ? 0.25 : 0) + prox * 0.3 + (w.straight - 0.85) * 0.8 + (w.hw === 'track' || w.hw === 'path' ? 0.05 : 0);
+      cand.push(w);
+    }
+    if (!cand.length) throw new Error('Les endroits trouvés sont dans des parcs fermés à cette heure. Essaie un autre horaire.');
+    cand.sort((a, b) => b.pre - a.pre);
+    const kept = [];
+    for (const w of cand) { if (kept.every(k => T.hav(k.mid, w.mid) > Math.max(150, o.len * 0.6))) kept.push(w); if (kept.length >= 24) break; }
+    progress('Mesure de la pente…');
+    try {
+      const el = await elevations(kept.flatMap(w => [w.A, w.mid, w.B]));
+      kept.forEach((w, i) => {
+        const a = el[3 * i], m = el[3 * i + 1], b = el[3 * i + 2];
+        w.grade = (b - a) / w.len * 100; w.bump = Math.abs(m - (a + b) / 2);
+        if (o.hill && w.grade < 0) { [w.A, w.B] = [w.B, w.A]; w.coords = w.coords.slice().reverse(); w.grade = -w.grade; }
+        const g = Math.abs(w.grade);
+        w.slope = o.hill ? (g < 3 ? g / 3 * 0.4 : g <= 10 ? 1 - Math.abs(g - 6.5) / 7 : Math.max(0, 1 - (g - 10) / 6))
+          : 1 - clamp(g / 3, 0, 1) - clamp(w.bump / 4, 0, 0.5);
+        w.score = w.pre + w.slope * 0.6;
+      });
+    } catch (e) { kept.forEach(w => { w.score = w.pre; w.grade = null; }); }
+    kept.sort((a, b) => b.score - a.score);
+    return { spots: kept.slice(0, 3), greens: area.greens };
+  }
+
+  /* ============================================================ PARCOURS */
+  const route = { sessionId: null, mode: 'loop', results: null, sel: 0, form: {} };
+  function prepareRoute(id) {
+    const s = byId(id);
+    route.sessionId = id; route.results = null; route.sel = 0;
+    route.mode = s && T.isInterval(s) ? 'spot' : 'loop';
+    route.form = {};
+    show('route');
+  }
+  function routeDefaults(s) {
+    const m = s ? met(s) : { distKm: 8, durMin: 50, dplus: 0 };
+    return {
+      dist: m.distKm || 8, dplus: m.dplus || 0, time: (s && s.time) || S().defaultTime,
+      len: s ? T.needLength(s, S().fastPace) : 300, hill: s ? s.type === 'cotes' : false,
+      warm: s && s.warmupMin ? Math.round(s.warmupMin / S().easyPace * 10) / 10 : 2,
+      date: s ? s.date : today(), durMin: m.durMin || 60,
+    };
+  }
+  async function renderRoute() {
+    ensureMap();
+    if (map) map.invalidateSize();
+    setTimeout(() => map && map.invalidateSize(), 60);
+    const p = $('#routePanel');
+    if (!window.L) { p.innerHTML = `<div class="card">La carte n’a pas pu se charger (réseau).</div>`; return; }
+    if (!S().home) {
+      p.innerHTML = `<div class="banner"><div style="font-size:22px">📍</div><div><b>Point de départ manquant</b>Règle-le dans Réglages pour générer des parcours.<div class="actions" style="margin-top:8px"><button class="btn sm primary" id="rHome">Régler</button></div></div></div>`;
+      $('#rHome').onclick = () => show('settings'); return;
+    }
+    const upcoming = state.sessions.filter(x => x.date >= today()).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10);
+    if (route.sessionId == null) { const t = sessionsOn(today())[0]; route.sessionId = t ? t.id : ''; if (t && T.isInterval(t)) route.mode = 'spot'; }
+    const s = route.sessionId ? byId(route.sessionId) : null;
+    const d = Object.assign(routeDefaults(s), route.form);
+    p.innerHTML = `
+      <div class="seg"><button data-m="loop" class="${route.mode === 'loop' ? 'on' : ''}">Boucle</button><button data-m="spot" class="${route.mode === 'spot' ? 'on' : ''}">Spot fractionné</button></div>
+      <label class="field"><span>Séance</span><select id="rSess"><option value="">Sortie libre</option>${upcoming.map(x => `<option value="${x.id}" ${x.id === route.sessionId ? 'selected' : ''}>${dateLong(x.date)} · ${esc(x.title || typeOf(x).label)}</option>`).join('')}</select></label>
+      ${route.mode === 'loop' ? `<div class="grid3">
+        <label class="field"><span>Distance km</span><input id="rDist" inputmode="decimal" value="${fmtKm(d.dist)}"></label>
+        <label class="field"><span>D+ visé m</span><input id="rDplus" inputmode="numeric" value="${d.dplus}"></label>
+        <label class="field"><span>Départ</span><input id="rTime" type="time" value="${d.time}"></label></div>`
+      : `<div class="grid3">
+        <label class="field"><span>Ligne (m)</span><input id="rLen" inputmode="numeric" value="${d.len}"></label>
+        <label class="field"><span>Échauff. km</span><input id="rWarm" inputmode="decimal" value="${fmtKm(d.warm)}"></label>
+        <label class="field"><span>Départ</span><input id="rTime" type="time" value="${d.time}"></label></div>
+        <div class="toggle-row" style="margin-bottom:12px"><button class="btn sm ${d.hill ? '' : 'on'}" data-hill="0">Plat</button><button class="btn sm ${d.hill ? 'on' : ''}" data-hill="1">En côte</button></div>`}
+      <div id="rWx"></div>
+      <button class="btn primary block" id="rGo">${route.mode === 'loop' ? 'Générer mes boucles' : 'Trouver un spot'}</button>
+      <div id="rProg"></div><div id="rRes"></div>
+      <p class="small muted" style="margin:16px 4px">Données © contributeurs OpenStreetMap · météo et relief Open-Meteo · itinéraires ${S().router === 'ors' && S().orsKey ? 'OpenRouteService' : 'OSRM (FOSSGIS)'}. Dénivelé estimé à partir d’un modèle de terrain (précision ~10 %).</p>`;
+    const keep = () => {
+      const f = route.form;
+      const g = id => { const el = $(id, p); return el ? el.value : null; };
+      const num = x => x == null ? null : parseFloat(String(x).replace(',', '.'));
+      if (g('#rDist') != null) { f.dist = num(g('#rDist')); f.dplus = num(g('#rDplus')) || 0; }
+      if (g('#rLen') != null) { f.len = num(g('#rLen')); f.warm = num(g('#rWarm')); }
+      f.time = g('#rTime');
+    };
+    $$('.seg button', p).forEach(b => b.onclick = () => { keep(); route.mode = b.dataset.m; route.results = null; renderRoute(); });
+    $$('[data-hill]', p).forEach(b => b.onclick = () => { keep(); route.form.hill = b.dataset.hill === '1'; renderRoute(); });
+    $('#rSess', p).onchange = e => {
+      route.sessionId = e.target.value; route.form = {}; route.results = null;
+      const ns = byId(route.sessionId); route.mode = ns && T.isInterval(ns) ? 'spot' : 'loop'; renderRoute();
+    };
+    $('#rTime', p).onchange = () => { keep(); showMiniWx(d.date); };
+    $('#rGo', p).onclick = () => { keep(); runRoute(s, Object.assign(routeDefaults(s), route.form)); };
+    showMiniWx(d.date);
+    if (route.results) showResults(); else if (s && s.route) showSaved(s);
+  }
+  async function showMiniWx(date) {
+    const box = $('#rWx'); if (!box) return;
+    try {
+      const w = await getWeather();
+      const t = ($('#rTime') || {}).value || S().defaultTime;
+      const h = T.hourAt(w, T.hourIndex(w, T.atTime(date, t)));
+      if (!h) { box.innerHTML = ''; return; }
+      let [e, l] = T.wmo(h.code);
+      if (!h.isDay && h.code <= 2) e = '🌙';
+      const adv = T.advice(h, route.sessionId ? byId(route.sessionId) : null).filter(a => a.lvl !== 'ok');
+      box.innerHTML = `<div class="mini-wx"><span class="e">${e}</span><div><b>${Math.round(h.temp)}°</b> · ${l} · pluie ${h.pop}% · vent ${Math.round(h.wind)} km/h${adv.length ? `<div class="small" style="color:var(--amber)">${esc(adv[0].txt)}</div>` : ''}</div></div>`;
+    } catch (e) { box.innerHTML = ''; }
+  }
+  function weatherFlags(w, start) {
+    const h = T.hourAt(w, T.hourIndex(w, start));
+    return { heat: h ? h.feels >= 25 : false, night: h ? !h.isDay : false, h };
+  }
+  async function runRoute(s, f) {
+    const prog = $('#rProg'), res = $('#rRes');
+    const go = $('#rGo'); go.disabled = true;
+    res.innerHTML = '';
+    layers.routes.clearLayers(); layers.spots.clearLayers();
+    const step = t => { prog.innerHTML = `<div class="progress"><div class="spin"></div>${esc(t)}</div>`; };
+    try {
+      const start = T.atTime(f.date, f.time);
+      let w = null; try { w = await getWeather(); } catch (e) { /* sans météo */ }
+      const flags = weatherFlags(w, start);
+      if (route.mode === 'loop') {
+        if (!(f.dist > 0.5 && f.dist < 80)) throw new Error('Distance invalide');
+        const dur = Math.round((f.dist + (f.dplus || 0) / 100) * S().easyPace);
+        const r = await generateLoops({ home: S().home, distKm: f.dist, dplus: f.dplus || 0, start, durMin: dur, heat: flags.heat, night: flags.night }, step);
+        route.results = { kind: 'loop', items: r.routes, info: r.info, f };
+      } else {
+        if (!(f.len >= 50 && f.len <= 2000)) throw new Error('Longueur invalide');
+        const r = await findSpots({ home: S().home, len: Math.round(f.len), warmKm: f.warm, hill: !!f.hill, start, durMin: f.durMin || 60 }, step);
+        route.results = { kind: 'spot', items: r.spots, info: [], f };
+      }
+      route.sel = 0;
+      prog.innerHTML = '';
+      showResults();
+    } catch (e) {
+      prog.innerHTML = `<div class="card bad-line">${esc(e.message)}</div>`;
+    } finally { go.disabled = false; }
+  }
+  function showResults() {
+    const r = route.results, box = $('#rRes'); if (!r || !box) return;
+    layers.routes.clearLayers(); layers.spots.clearLayers();
+    const s = route.sessionId ? byId(route.sessionId) : null;
+    let html = r.info.map(t => `<div class="warn-line" style="margin:0 4px 10px">${esc(t)}</div>`).join('');
+    if (r.kind === 'loop') {
+      const bounds = [];
+      r.items.forEach((c, i) => {
+        const pl = L.polyline(c.coords, { color: ROUTE_COLORS[i], weight: i === route.sel ? 6 : 4, opacity: i === route.sel ? 0.95 : 0.45 }).addTo(layers.routes);
+        pl.on('click', () => { route.sel = i; showResults(); });
+        if (i === route.sel) pl.bringToFront();
+        bounds.push(...c.coords);
+        const dErr = Math.abs(c.distance / 1000 - r.f.dist) / r.f.dist;
+        html += `<div class="card opt ${i === route.sel ? 'sel' : ''}" data-i="${i}" style="--c:${ROUTE_COLORS[i]}"><div class="dot"></div><div class="grow">
+          <h4>Option ${i + 1}${i === 0 ? ' · la plus adaptée' : ''}</h4>
+          <div class="kv"><span><b>${fmtKm(c.distance / 1000)}</b> km</span><span>D+ <b>${c.dplus != null ? c.dplus : '?'}</b> m</span><span><b>${Math.round(c.greenFrac * 100)} %</b> nature</span></div>
+          ${c.parks.length ? `<div class="chips">${c.parks.map(n => `<span class="chip">🌳 ${esc(n)}</span>`).join('')}</div>` : ''}
+          ${dErr > 0.12 ? `<div class="warn-line">Écart de distance de ${Math.round(dErr * 100)} % : ajuste en route.</div>` : ''}
+          ${c.overlap > 0.15 ? `<div class="warn-line">Comporte un aller-retour.</div>` : ''}
+          ${c.closedNames.length ? `<div class="bad-line">Traverse : ${esc(c.closedNames.join(', '))}</div>` : ''}
+          ${i === route.sel ? `<div class="actions"><button class="btn sm primary" data-a="save">${s ? 'Garder pour la séance' : 'Garder'}</button><button class="btn sm" data-a="gpx">GPX</button></div>` : ''}
+        </div></div>`;
+      });
+      if (bounds.length && map) map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
+    } else {
+      const bounds = [];
+      r.items.forEach((w, i) => {
+        const col = ROUTE_COLORS[i];
+        L.polyline(w.coords, { color: col, weight: i === route.sel ? 8 : 5, opacity: i === route.sel ? 1 : 0.5 }).addTo(layers.spots).on('click', () => { route.sel = i; showResults(); });
+        if (i === route.sel) {
+          L.marker(w.A, { icon: abIcon('A', '#2f9e44') }).addTo(layers.spots);
+          L.marker(w.B, { icon: abIcon('B', '#e03131') }).addTo(layers.spots);
+          if (w.approach) L.polyline(w.approach.coords, { color: col, weight: 3, dashArray: '6 6', opacity: 0.8 }).addTo(layers.spots);
+        }
+        bounds.push(...w.coords);
+        if (w.approach && i === route.sel) bounds.push(...w.approach.coords);
+        const grade = w.grade != null ? `${(Math.round(Math.abs(w.grade) * 10) / 10).toString().replace('.', ',')} %` : '?';
+        const surf = { asphalt: 'goudron', paved: 'revêtu', compacted: 'stabilisé', fine_gravel: 'gravillons fins', gravel: 'gravier', dirt: 'terre', ground: 'terre', grass: 'herbe', sand: 'sable', unpaved: 'non revêtu' }[w.surface] || null;
+        html += `<div class="card opt ${i === route.sel ? 'sel' : ''}" data-i="${i}" style="--c:${col}"><div class="dot"></div><div class="grow">
+          <h4>${esc(w.green ? w.green.name : (w.wayName || 'Chemin'))}</h4>
+          <div class="kv"><span>Ligne <b>${Math.round(w.len)} m</b></span><span>Pente <b>${grade}</b></span><span>à <b>${fmtKm(w.home / 1000)}</b> km</span></div>
+          <div class="chips">
+            <span class="chip">${w.road >= 150 ? '🤫 au calme' : w.road >= 70 ? '🙂 assez calme' : '🚗 route proche'} (route à ${w.road >= 400 ? '400+' : Math.round(w.road)} m)</span>
+            ${surf ? `<span class="chip">${surf}</span>` : ''}
+            ${w.green && w.green.label ? `<span class="chip">🕒 ${esc(w.green.label)}</span>` : ''}
+          </div>
+          ${w.approach ? `<div class="small" style="margin-top:6px">Trajet depuis chez toi : <b>${fmtKm(w.approach.distance / 1000)} km</b> (ton échauffement)</div>` : ''}
+          ${i === route.sel ? `<div class="actions"><button class="btn sm primary" data-a="approach">${w.approach ? 'Recalculer le trajet' : 'Trajet depuis chez moi'}</button><button class="btn sm" data-a="save">Garder</button><button class="btn sm" data-a="gpx">GPX</button>
+          <a class="btn sm" href="https://maps.apple.com/?daddr=${w.A[0].toFixed(5)},${w.A[1].toFixed(5)}&dirflg=w" target="_blank" rel="noopener">Plans</a></div>
+          <p class="small muted" style="margin:8px 0 0">Fais tes efforts de A vers B${route.results.f.hill ? ' (en montée)' : ''}, récupère en revenant vers A.</p>` : ''}
+        </div></div>`;
+      });
+      if (bounds.length && map) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 17 });
+      if (!r.items.length) html += `<div class="card">Aucun spot trouvé.</div>`;
+    }
+    box.innerHTML = html;
+    $$('.opt', box).forEach(el => el.addEventListener('click', e => {
+      const a = e.target.closest('[data-a]');
+      const i = +el.dataset.i;
+      if (a) { e.stopPropagation(); return resultAction(a.dataset.a, r.items[i]); }
+      if (e.target.closest('a')) return;
+      if (route.sel !== i) { route.sel = i; showResults(); }
+    }));
+  }
+  async function resultAction(act, item) {
+    const s = route.sessionId ? byId(route.sessionId) : null;
+    const isSpot = route.results.kind === 'spot';
+    if (act === 'approach') {
+      try {
+        toast('Calcul du trajet…');
+        const H = [S().home.lat, S().home.lon];
+        item.approach = await routeVia([H, item.A]);
+        showResults();
+      } catch (e) { toast('Trajet indisponible : ' + e.message); }
+      return;
+    }
+    const coords = isSpot ? (item.approach ? item.approach.coords.concat(item.coords) : item.coords) : item.coords;
+    const name = (s ? (s.title || typeOf(s).label) + ' ' + s.date : 'Mon Trail ' + today());
+    if (act === 'gpx') {
+      const wpts = isSpot ? [{ lat: item.A[0], lon: item.A[1], name: 'A - départ effort' }, { lat: item.B[0], lon: item.B[1], name: 'B - fin effort' }] : [];
+      await shareFile(name.replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_') + '.gpx', T.gpx(name, coords, wpts), 'application/gpx+xml');
+      return;
+    }
+    if (act === 'save') {
+      if (!s) { toast('Choisis une séance dans la liste pour garder ce parcours'); return; }
+      const pts = coords.length > 400 ? T.resample(coords, 400) : coords;
+      s.route = { kind: isSpot ? 'spot' : 'loop', coords: pts.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), distance: isSpot ? (item.approach ? item.approach.distance : 0) + item.len : item.distance, dplus: isSpot ? null : item.dplus, A: item.A, B: item.B, len: item.len };
+      save(); toast('Parcours enregistré pour la séance');
+    }
+  }
+  function showSaved(s) {
+    const r = s.route; if (!r || !map) return;
+    layers.routes.clearLayers(); layers.spots.clearLayers();
+    L.polyline(r.coords, { color: ROUTE_COLORS[0], weight: 5 }).addTo(layers.routes);
+    if (r.A) { L.marker(r.A, { icon: abIcon('A', '#2f9e44') }).addTo(layers.spots); L.marker(r.B, { icon: abIcon('B', '#e03131') }).addTo(layers.spots); }
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(r.coords), { padding: [24, 24], maxZoom: 16 });
+    $('#rRes').innerHTML = `<div class="card"><b>Parcours enregistré</b><div class="small muted">${fmtKm(r.distance / 1000)} km${r.dplus != null ? ' · D+ ' + r.dplus + ' m' : ''}</div>
+      <div class="actions"><button class="btn sm" id="svGpx">GPX</button><button class="btn sm ghost" id="svDel">Retirer</button></div></div>`;
+    $('#svGpx').onclick = () => shareFile(((s.title || 'parcours') + '_' + s.date).replace(/[^\w\-]+/g, '_') + '.gpx', T.gpx(s.title || 'Parcours', r.coords, r.A ? [{ lat: r.A[0], lon: r.A[1], name: 'A' }, { lat: r.B[0], lon: r.B[1], name: 'B' }] : []), 'application/gpx+xml');
+    $('#svDel').onclick = () => { delete s.route; save(); layers.routes.clearLayers(); layers.spots.clearLayers(); $('#rRes').innerHTML = ''; };
+  }
+
+  /* ============================================================ RÉGLAGES */
+  let setMap = null;
+  function renderSettings() {
+    const v = $('#view-settings'), st = S();
+    v.innerHTML = `
+      <div class="section">Point de départ</div>
+      <div class="card">
+        <div id="homeLbl">${st.home ? `📍 ${esc(st.home.label || (st.home.lat.toFixed(4) + ', ' + st.home.lon.toFixed(4)))}` : '<span class="muted">Non défini</span>'}</div>
+        <div class="setmap" id="setMap"></div>
+        <p class="small muted" style="margin:0 0 10px">Touche la carte pour placer ton départ, ou :</p>
+        <button class="btn block" id="geoBtn">📍 Utiliser ma position</button>
+        <form id="addrForm" style="display:flex;gap:8px;margin-top:10px"><input class="grow" id="addr" placeholder="Adresse…" style="border:1px solid var(--line);border-radius:12px;padding:11px;background:var(--card)"><button class="btn" type="submit">Chercher</button></form>
+        <div class="res-list" id="addrRes"></div>
+      </div>
+      <div class="section">Mes allures</div>
+      <div class="card"><div class="grid3">
+        <label class="field"><span>Endurance /km</span><input id="sEasy" value="${T.fmtPace(st.easyPace)}"></label>
+        <label class="field"><span>Fractionné /km</span><input id="sFast" value="${T.fmtPace(st.fastPace)}"></label>
+        <label class="field"><span>Heure habituelle</span><input id="sTime" type="time" value="${st.defaultTime}"></label></div>
+        <p class="small muted" style="margin:0">Servent à estimer distances et durées, et la longueur des lignes droites pour le fractionné.</p></div>
+      <div class="section">Itinéraires</div>
+      <div class="card">
+        <div class="toggle-row"><button class="btn sm ${st.router !== 'ors' ? 'on' : ''}" data-router="osrm">Standard (sans clé)</button><button class="btn sm ${st.router === 'ors' ? 'on' : ''}" data-router="ors">OpenRouteService</button></div>
+        <p class="small muted">OpenRouteService privilégie les sentiers (profil randonnée) et sait contourner les parcs fermés. Clé gratuite sur <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+        <label class="field" ${st.router === 'ors' ? '' : 'hidden'}><span>Clé OpenRouteService</span><input id="sOrs" value="${esc(st.orsKey)}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      </div>
+      <div class="section">Lecture des captures</div>
+      <div class="card">
+        <div class="toggle-row"><button class="btn sm ${st.reader !== 'claude' ? 'on' : ''}" data-reader="ocr">Sur le téléphone</button><button class="btn sm ${st.reader === 'claude' ? 'on' : ''}" data-reader="claude">Claude (plus fiable)</button></div>
+        <p class="small muted">La lecture sur le téléphone est gratuite et privée ; vérifie les champs. Avec une clé API Claude (payante, <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>), la lecture comprend mieux les séances et une capture de semaine entière. La clé reste sur ce téléphone.</p>
+        <label class="field" ${st.reader === 'claude' ? '' : 'hidden'}><span>Clé API Claude</span><input id="sClaude" type="password" value="${esc(st.claudeKey)}" autocomplete="off"></label>
+      </div>
+      <div class="section">Sauvegarde</div>
+      <div class="card"><p class="small muted" style="margin-top:0">Tes séances sont enregistrées sur ce téléphone uniquement. Exporte une sauvegarde de temps en temps.</p>
+        <div class="toggle-row"><button class="btn" id="bExp">Exporter</button><button class="btn" id="bImp">Importer</button></div></div>
+      <div class="section">Installer</div>
+      <div class="card small">${isStandalone() ? '✓ L’app est installée sur ton écran d’accueil.' : 'Dans Safari : touche <b>Partager</b> puis <b>Sur l’écran d’accueil</b>. L’app s’ouvrira en plein écran comme une vraie app.'}</div>
+      <p class="small muted" style="text-align:center;margin:20px 0">Mon Trail · données OpenStreetMap, Open-Meteo</p>`;
+
+    // mini-carte
+    if (setMap) { setMap.remove(); setMap = null; }
+    if (window.L) {
+      setMap = L.map('setMap', { zoomControl: false, attributionControl: false });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'tiles-dark' }).addTo(setMap);
+      const h = st.home;
+      setMap.setView(h ? [h.lat, h.lon] : [46.6, 2.4], h ? 15 : 5);
+      if (h) L.marker([h.lat, h.lon], { icon: L.divIcon({ className: '', html: '<div class="home-pin"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(setMap);
+      setMap.on('click', e => setHome(e.latlng.lat, e.latlng.lng, null));
+      setTimeout(() => setMap && setMap.invalidateSize(), 80);
+    }
+    $('#geoBtn').onclick = () => {
+      if (!navigator.geolocation) { toast('Localisation indisponible'); return; }
+      toast('Localisation…');
+      navigator.geolocation.getCurrentPosition(p => setHome(p.coords.latitude, p.coords.longitude, null),
+        e => toast(e.code === 1 ? 'Autorise la localisation pour Safari dans Réglages iOS' : 'Position introuvable'), { enableHighAccuracy: true, timeout: 15000 });
+    };
+    $('#addrForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const q = $('#addr').value.trim(); if (!q) return;
+      const box = $('#addrRes'); box.innerHTML = '<div class="progress"><div class="spin"></div>Recherche…</div>';
+      try {
+        const j = await fetchJSON(`${API.nomSearch}?format=jsonv2&limit=5&accept-language=fr&q=${encodeURIComponent(q)}`);
+        box.innerHTML = j.length ? j.map((r, i) => `<div class="res-item" data-i="${i}">${esc(r.display_name)}</div>`).join('') : '<div class="small muted">Aucun résultat</div>';
+        $$('.res-item', box).forEach(el => el.onclick = () => { const r = j[+el.dataset.i]; setHome(+r.lat, +r.lon, shortName(r.display_name)); });
+      } catch (err) { box.innerHTML = `<div class="small muted">Recherche indisponible (${esc(err.message)})</div>`; }
+    });
+    const paceIn = (id, k) => $(id).addEventListener('change', e => { const p = T.parsePace(e.target.value); if (p && p > 2 && p < 15) { st[k] = p; save(); e.target.value = T.fmtPace(p); } else e.target.value = T.fmtPace(st[k]); });
+    paceIn('#sEasy', 'easyPace'); paceIn('#sFast', 'fastPace');
+    $('#sTime').addEventListener('change', e => { st.defaultTime = e.target.value || '18:00'; save(); });
+    $$('[data-router]', v).forEach(b => b.onclick = () => { st.router = b.dataset.router; save(); areaCache.clear(); renderSettings(); });
+    $$('[data-reader]', v).forEach(b => b.onclick = () => { st.reader = b.dataset.reader; save(); renderSettings(); });
+    const ors = $('#sOrs'); if (ors) ors.addEventListener('change', e => { st.orsKey = e.target.value.trim(); save(); toast('Clé enregistrée'); });
+    const cl = $('#sClaude'); if (cl) cl.addEventListener('change', e => { st.claudeKey = e.target.value.trim(); save(); toast('Clé enregistrée'); });
+    $('#bExp').onclick = () => shareFile(`mon-trail-${today()}.json`, JSON.stringify(state, null, 1), 'application/json');
+    $('#bImp').onclick = () => {
+      const fi = $('#jsonInput'); fi.value = '';
+      fi.onchange = async () => {
+        const f = fi.files && fi.files[0]; if (!f) return;
+        try {
+          const j = JSON.parse(await f.text());
+          if (!j.settings || !Array.isArray(j.sessions)) throw new Error('fichier non reconnu');
+          if (!confirm(`Remplacer tes données par cette sauvegarde (${j.sessions.length} séances) ?`)) return;
+          state = { settings: Object.assign({}, DEFAULTS.settings, j.settings), sessions: j.sessions }; save();
+          toast('Sauvegarde restaurée'); renderSettings();
+        } catch (e) { toast('Import impossible : ' + e.message); }
+      };
+      fi.click();
+    };
+  }
+  function shortName(n) { return String(n || '').split(',').slice(0, 3).join(',').trim(); }
+  async function setHome(lat, lon, label) {
+    S().home = { lat, lon, label: label || `${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+    save(); wx = null; areaCache.clear(); drawHome();
+    if (map) map.setView([lat, lon], 14);
+    if (current === 'settings') renderSettings();
+    toast('Point de départ enregistré');
+    if (!label) {
+      try {
+        const r = await fetchJSON(`${API.nomReverse}?format=jsonv2&zoom=17&accept-language=fr&lat=${lat}&lon=${lon}`);
+        if (r && r.display_name) { S().home.label = shortName(r.display_name); save(); if (current === 'settings') { const el = $('#homeLbl'); if (el) el.textContent = '📍 ' + S().home.label; } }
+      } catch (e) { /* étiquette facultative */ }
+    }
+  }
+
+  /* --------------------------------------------------------------- démarrage */
+  window.addEventListener('pageshow', () => { if (current === 'today') renderToday(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && current === 'today') renderToday(); });
+  renderToday();
+  window.__mt = { state: () => state, show, setHome, T }; // pour les tests
+})();
+</script>
+</body>
+</html>
