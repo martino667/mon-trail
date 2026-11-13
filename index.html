@@ -384,7 +384,7 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
       if (tok.kind === 'dist') out.repDist = tok.value; else out.repTime = tok.value;
       // récupération juste après : "/30\"", "- 1'30", "r 1'", "recup 1'30"
       const rest = after.slice(tok.len, tok.len + 60);
-      const mr = rest.match(/^\s?(?:\/|-|r\s?=?|recup(?:eration)?\s?(?:de\s)?:?|avec\s(?:\d+\s)?)\s?/);
+      const mr = rest.match(/^\s?\(?\s?(?:\/|-|r\s?=?|recup(?:eration)?\s?(?:de\s)?:?|avec\s(?:\d+\s)?)\s?/);
       if (mr) {
         const rt = tokenAt(rest.slice(mr[0].length));
         if (rt && rt.kind === 'time') out.recTime = rt.value;
@@ -444,57 +444,123 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
   };
 
   /* --------------------------------------------- capture Kiprun → séance */
+  // Allures : "8'23/km", "823”/km" (apostrophe perdue à la lecture), "5°02/km", "7'44 vers 7'11"
+  const PACE_RE = /(^|[^\d,.])(\d{1,2})\s?['°":.m]?\s?(\d{2})\s?["']*\s?(?:min\s?)?\/\s*k/g;
+  function findPaces(t) {
+    const out = [];
+    let m;
+    PACE_RE.lastIndex = 0;
+    while ((m = PACE_RE.exec(t))) {
+      const v = +m[2] + +m[3] / 60;
+      if (+m[3] < 60 && v >= 2.5 && v <= 15) out.push(v);
+    }
+    return out;
+  }
+  L.parsePaceRange = function (str) {
+    if (str == null || str === '') return null;
+    const t = norm(String(str)).replace(/\bt(?=\d{2})/g, '7');
+    const ps = [];
+    for (const m of t.matchAll(/(\d{1,2})\s?['°":.mh]\s?(\d{2})/g)) { const v = +m[1] + +m[2] / 60; if (+m[2] < 60 && v >= 2.5 && v <= 15) ps.push(v); }
+    if (!ps.length) { const v = L.parsePace(str); return v ? { lo: v, hi: v } : null; }
+    return { lo: Math.min(...ps), hi: Math.max(...ps) };
+  };
+  const fmtRange = (lo, hi) => (hi - lo > 0.04 ? `${L.fmtPace(lo)}–${L.fmtPace(hi)}` : L.fmtPace(lo));
+  function unitToken(v, u) {
+    v = parseFloat(String(v).replace(',', '.'));
+    if (u === 'km') return { kind: 'dist', value: Math.round(v * 1000) };
+    if (u === 'm') return { kind: 'dist', value: Math.round(v) };
+    if (u === 'min' || u === 'mn' || u === "'") return { kind: 'time', value: Math.round(v * 60) };
+    if (u === 's' || u === 'sec' || u === '"') return { kind: 'time', value: Math.round(v) };
+    return v >= 50 ? { kind: 'dist', value: Math.round(v) } : { kind: 'time', value: Math.round(v) };
+  }
+
   L.parsePlan = function (text, ref) {
     const raw = String(text || '');
-    let t = norm(raw);
+    let t = norm(raw)
+      .replace(/\bo(?=h\s?\d)/g, '0')                 // "Oh51" → "0h51"
+      .replace(/\bt(?=\d{2}\s?"?\s?\/)/g, '7');        // "T11”/" → "711"/"
     const s = { rawText: raw.trim() };
 
-    // allure (à retirer avant de chercher distances/durées)
-    const paceRe = /(\d{1,2})\s?['m:](\d{2})"?\s?(?:min)?\s?\/\s?km/g;
-    let pm, paces = [];
-    while ((pm = paceRe.exec(t))) paces.push(+pm[1] + +pm[2] / 60);
-    if (paces.length) s.pace = L.fmtPace(Math.min(...paces));
-    t = t.replace(paceRe, ' ').replace(/\d+(?:[.,]\d+)?\s?km\s?\/\s?h/g, ' ');
+    // allures (relevées puis retirées avant de chercher distances et durées)
+    const paces = findPaces(t);
+    t = t.replace(PACE_RE, '$1 ').replace(/\d+(?:[.,]\d+)?\s?km\s?\/\s?h/g, ' ');
 
     s.type = L.classify(t);
-    s.date = L.parseDateFr(t, ref);
 
-    // titre : première ligne qui ressemble à un intitulé de séance
+    // date : en-tête Kiprun "26/11/2026 - …" sinon date en toutes lettres
+    let m = t.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) s.date = `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
+    else s.date = L.parseDateFr(t, ref);
+
+    // répétitions : liste "100m-200m-300m-…" (pyramide), "N x …", ou lignes "200 m intensif"
+    const flat = t.replace(/\n/g, ' ');
+    const lists = [...flat.matchAll(/\d{2,4}\s?m(?:\s*\/?\s*-\s*\d{2,4}\s?m){2,}/g)].map(x => x[0].match(/\d{2,4}/g).map(Number));
+    const repList = lists.sort((a, b) => b.length - a.length)[0] || null;
+    const efforts = [...t.matchAll(/(\d{1,4}(?:[.,]\d)?)\s?(km|min|mn|sec|m|s|'|")?\s?(?:d'\s?)?intensif/g)].map(x => unitToken(x[1], x[2]));
+    const reps = parseReps(t);
+    const effDist = efforts.filter(e => e.kind === 'dist').map(e => e.value);
+    if (effDist.length >= 3 && effDist.length === efforts.length && (!repList || effDist.length > repList.length) && new Set(effDist).size > 1) {
+      s.repList = effDist; s.reps = effDist.length; s.repDist = Math.max(...effDist);
+    } else if (repList && repList.length >= 3) {
+      s.repList = repList; s.reps = repList.length; s.repDist = Math.max(...repList);
+    } else if (reps) {
+      Object.assign(s, reps);
+    } else if (efforts.length >= 2) {
+      if (efforts.every(e => e.kind === 'dist')) { s.repList = efforts.map(e => e.value); s.reps = efforts.length; s.repDist = Math.max(...s.repList); if (new Set(s.repList).size === 1) delete s.repList; }
+      else { s.reps = efforts.length; s.repTime = Math.max(...efforts.map(e => e.value)); }
+    } else if (efforts.length === 1) {
+      const e = efforts[0];
+      if (e.kind === 'dist') s.repDist = e.value; else s.repTime = e.value;
+      const mx = t.match(/\bx\s?(\d{1,2})\b/); if (mx) s.reps = +mx[1];
+    }
+    if (s.recTime == null && s.recDist == null) {
+      const mr = t.match(/\(?\br\s?=\s?(\d{1,4}(?:[.,]\d)?)\s?(km|min|mn|sec|m|s|'|")?/) || t.match(/(\d{1,4})\s?(km|min|mn|sec|m|s|'|")?\s?(?:de\s)?(?:repos|recup)/);
+      if (mr) { const k = unitToken(mr[1], mr[2]); if (k.kind === 'dist') s.recDist = k.value; else s.recTime = k.value; }
+    }
+    if (s.reps && (s.type === 'autre' || s.type === 'footing')) s.type = 'fractionne';
+    const interval = !!(s.reps || s.repList || s.repDist || s.repTime) && s.type !== 'seuil';
+
+    // titre : "26/11/2026 - 8 x 200m (R=100m)"
+    const hm = raw.match(/\d{1,2}\/\d{1,2}\/\d{4}\s*[-–]\s*([^\n]+)/);
+    if (hm) {
+      let ti = hm[1].trim();
+      const cut = /(\.\.\.|…)/.test(ti);
+      ti = ti.replace(/\s*(\.\.\.|…).*$/, '').replace(/\s+[^\sA-Za-z0-9À-ÿ()]{1,2}$/, '').replace(/[\s:;|,°-]+$/, '').trim();
+      if (cut && s.repList) ti = s.repList.join('m-') + 'm' + (s.recDist ? ` (R=${s.recDist}m)` : '');
+      s.title = ti || null;
+    }
     const lines = raw.split(/\n+/).map(x => x.trim()).filter(x => x.length > 2);
-    const titleRe = /footing|fractionn|sortie|seuil|c[oô]te|endurance|r[ée]cup|vma|trail|renfo|allure|fartlek|longue/i;
-    const tl = lines.find(x => titleRe.test(x) && x.length < 60 && !/^(objectif|plan|pr[ée]paration)/i.test(x));
-    s.title = tl ? tl.replace(/\s+/g, ' ') : null;
+    if (!s.title) {
+      const titleRe = /footing|fractionn|sortie|seuil|c[oô]te|endurance|r[ée]cup|vma|trail|renfo|allure|fartlek|longue/i;
+      const tl = lines.find(x => titleRe.test(x) && x.length < 60 && !/^(objectif|plan|pr[ée]paration)/i.test(x));
+      s.title = tl ? tl.replace(/\s+/g, ' ') : null;
+    }
 
     // D+
-    let m = t.match(/d\s?\+\s?:?\s?(\d{2,4})\s?m?\b/) || t.match(/(\d{2,4})\s?m\s?(?:de\s)?d\s?\+/) ||
+    m = t.match(/d\s?\+\s?:?\s?(\d{2,4})\s?m?\b/) || t.match(/(\d{2,4})\s?m\s?(?:de\s)?d\s?\+/) ||
       t.match(/denivele(?:\s?positif)?[\s:]{0,4}\+?\s?(\d{2,4})/) || t.match(/\+\s?(\d{2,4})\s?m\b/);
     if (m) s.dplus = +m[1];
 
-    // échauffement / retour au calme
-    m = t.match(/echauffement[^0-9\n]{0,20}(\d{1,2}(?:\s?(?:min|mn|')|\s?h))/);
-    if (m) s.warmupMin = Math.round(L.parseDuration(m[1]));
-    m = t.match(/retour au calme[^0-9\n]{0,20}(\d{1,2}(?:\s?(?:min|mn|')))/);
-    if (m) s.cooldownMin = Math.round(L.parseDuration(m[1]));
+    // échauffement / retour au calme (la valeur peut être sur la ligne suivante)
+    m = t.match(/echauffement[^0-9]{0,25}(\d{1,3})\s?(min|mn|'|h)/);
+    if (m) s.warmupMin = m[2] === 'h' ? +m[1] * 60 : +m[1];
+    m = t.match(/retour au calme[^0-9]{0,25}(\d{1,3})\s?(min|mn|')/);
+    if (m) s.cooldownMin = +m[1];
 
-    // répétitions
-    const reps = parseReps(t);
-    if (reps) Object.assign(s, reps);
-
-    // durée totale
+    // durée totale : libellée, sinon "0h55", sinon la plus longue (hors fractionné)
     m = t.match(/(?:duree(?: totale| estimee)?|temps(?: total| estime)?)[\s:]{0,6}(\d{1,2}\s?h\s?\d{0,2}|\d{1,3}\s?(?:min|mn|'))/);
     let dur = m ? L.parseDuration(m[1]) : null;
     if (dur == null) {
+      const hs = [...t.matchAll(/(\d{1,2})\s?h\s?(\d{2})/g)].map(x => +x[1] * 60 + +x[2]).filter(x => x >= 10 && x <= 600);
+      if (hs.length) dur = Math.max(...hs);
+    }
+    if (dur == null && !interval) {
       const durs = [];
       const dre = /(\d{1,2})\s?h\s?(\d{2})?(?![a-z0-9])|(\d{1,3})\s?(?:minutes?|min|mn|')(?![\d"])/g;
       let dm;
       while ((dm = dre.exec(t))) durs.push(dm[1] ? +dm[1] * 60 + (dm[2] ? +dm[2] : 0) : +dm[3]);
       const big = durs.filter(x => x >= 15 && x <= 400);
       if (big.length) dur = Math.max(...big);
-    }
-    if (reps) {
-      const repSec = s.repTime || 0, recSec = s.recTime || repSec;
-      const computed = (s.warmupMin || 0) + (s.cooldownMin || 0) + (repSec ? s.reps * (repSec + recSec) / 60 : 0);
-      if (dur == null || (computed > 0 && dur < computed * 0.7)) dur = computed > 0 ? Math.round(computed) : dur;
     }
     if (dur != null) s.durationMin = Math.round(dur);
 
@@ -513,7 +579,34 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
       if (best != null && !(s.repDist && best * 1000 === s.repDist)) s.distanceKm = best;
     }
 
-    s.notes = lines.filter(x => /echauff|[ée]chauff|retour au calme|r[ée]cup|allure|x\s?\d|côte|cote|consigne|terrain/i.test(x)).slice(0, 6).join(' · ');
+    // allures imposées
+    if (paces.length) {
+      const lo = Math.min(...paces);
+      if (interval) {
+        const fastP = paces.filter(p => p < lo * 1.3), slowP = paces.filter(p => p >= lo * 1.3);
+        s.paceFast = lo;
+        s.pace = fmtRange(lo, Math.max(...fastP));
+        if (slowP.length) {
+          const cnt = new Map(); slowP.forEach(p => { const k = Math.round(p * 60); cnt.set(k, (cnt.get(k) || 0) + 1); });
+          const best = [...cnt.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+          s.paceEasy = best / 60;
+        }
+      } else {
+        const hi = Math.max(...paces);
+        s.paceRange = [lo, hi]; s.paceEasy = (lo + hi) / 2; s.pace = fmtRange(lo, hi);
+      }
+    }
+
+    // consignes : le texte de description (avant "Détails de ma séance")
+    const di = raw.search(/d[ée]tails de ma s[ée]ance/i);
+    let desc = '';
+    if (di > 0) {
+      desc = raw.slice(0, di).split(/\n+/).map(x => x.trim())
+        .filter(x => x.length > 12 && /\p{L}{4,}\s+\p{L}{2,}/u.test(x) && !/\d{1,2}\/\d{1,2}\/\d{4}|temps|distance|\/k/i.test(x))
+        .join(' ').replace(/\s+/g, ' ').trim();
+    }
+    const kiprun = di > 0 || !!hm || /intensif|exercices/i.test(raw);
+    s.notes = desc ? desc.slice(0, 400) : kiprun ? '' : lines.filter(x => /[ée]chauff|retour au calme|r[ée]cup|allure|x\s?\d|côte|cote|consigne|terrain/i.test(x)).slice(0, 6).join(' · ');
     return s;
   };
 
@@ -528,11 +621,12 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
     if (m) a.distanceKm = num(m[1]);
     // durée : jetons h:mm:ss ou mm:ss qui ne sont pas des allures
     const times = [];
-    for (const x of t.matchAll(/(?<![\d:])(\d{1,2}:\d{2}(?::\d{2})?)(?![:\d])/g)) {
-      const after = t.slice(x.index + x[0].length, x.index + x[0].length + 10);
-      const before = t.slice(Math.max(0, x.index - 22), x.index);
+    for (const x of t.matchAll(/(?:^|[^\d:])(\d{1,2}:\d{2}(?::\d{2})?)(?![:\d])/g)) {
+      const at = x.index + x[0].length - x[1].length, end = at + x[1].length;
+      const after = t.slice(end, end + 10);
+      const before = t.slice(Math.max(0, at - 22), at);
       if (/^\s?(?:min)?\s?\/\s?(?:km|100)/.test(after) || /allure|rythme|vitesse/.test(before.slice(-12))) continue;
-      const near = before + ' ' + t.slice(x.index + x[0].length, x.index + x[0].length + 22);
+      const near = before + ' ' + t.slice(end, end + 22);
       times.push({ v: L.parseDuration(x[1]), labelled: /duree|temps|chrono/.test(near), hms: x[1].length > 5 });
     }
     const pick = times.find(x => x.labelled && x.v >= 3) || times.find(x => x.hms) ||
@@ -555,21 +649,40 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
   /* ---------------------------------------------- métriques d'une séance */
   L.isInterval = s => s && (s.type === 'fractionne' || s.type === 'cotes');
 
+  // Allures à utiliser pour une séance : celles imposées par Kiprun, sinon celles des réglages
+  L.sessionPaces = function (s, easy, fast) {
+    let e = s.paceEasy || null, f = s.paceFast || null;
+    if ((!e || !f) && s.pace) {
+      const r = L.parsePaceRange(s.pace);
+      if (r) { if (L.isInterval(s)) f = f || r.lo; else e = e || (r.lo + r.hi) / 2; }
+    }
+    return { easy: e || easy || 6, fast: f || fast || 4.75, fromPlan: { easy: !!e, fast: !!f } };
+  };
+  L.paceTarget = function (s) {
+    if (L.isInterval(s)) return null;
+    if (s.paceRange) return { lo: s.paceRange[0], hi: s.paceRange[1] };
+    return s.pace ? L.parsePaceRange(s.pace) : null;
+  };
+
   // easy = allure endurance (min/km), fast = allure fractionné. Trail : km-effort = km + D+/100
   L.metrics = function (s, easy, fast) {
-    easy = easy || 6; fast = fast || 4.75;
+    const P = L.sessionPaces(s, easy, fast);
+    easy = P.easy; fast = P.fast;
     let dur = s.durationMin || null, dist = s.distanceKm || null;
     const dplus = s.dplus || 0;
     if (L.isInterval(s)) {
-      const effPace = s.type === 'cotes' ? fast * 1.35 : fast;
-      const repSec = s.repTime || (s.repDist ? s.repDist / 1000 * effPace * 60 : 0);
-      const recSec = s.recTime != null ? s.recTime : repSec;
+      const effPace = s.type === 'cotes' && !P.fromPlan.fast ? fast * 1.35 : fast;
+      const repMeters = s.repList ? s.repList.reduce((a, b) => a + b, 0) : s.repDist && s.reps ? s.repDist * s.reps : 0;
+      const nReps = s.reps || (s.repList ? s.repList.length : 0);
+      const repSecTot = repMeters ? repMeters / 1000 * effPace * 60 : (s.repTime || 0) * nReps;
+      const recOne = s.recTime != null ? s.recTime : s.recDist ? s.recDist / 1000 * easy * 60 : (nReps ? repSecTot / nReps : 0);
+      const recSecTot = recOne * nReps;
       const wu = s.warmupMin != null ? s.warmupMin : 20, cd = s.cooldownMin != null ? s.cooldownMin : 10;
-      if (!dur) dur = wu + cd + (s.reps ? s.reps * (repSec + recSec) / 60 : 20);
+      if (!dur) dur = wu + cd + (nReps ? (repSecTot + recSecTot) / 60 : 20);
       if (!dist) {
-        const repKm = s.repDist ? s.repDist / 1000 : repSec / 60 / effPace;
-        const recKm = recSec / 60 / (easy * 1.25);
-        dist = (wu + cd) / easy + (s.reps ? s.reps * (repKm + recKm) : 3);
+        const repKm = repMeters ? repMeters / 1000 : repSecTot / 60 / effPace;
+        const recKm = s.recDist ? s.recDist * nReps / 1000 : recSecTot / 60 / easy;
+        dist = (wu + cd) / easy + (nReps ? repKm + recKm : 3);
       }
     } else {
       if (!dist && dur) dist = Math.max(1, dur / easy - dplus / 100);
@@ -584,9 +697,9 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
 
   // longueur de la ligne droite nécessaire au fractionné (m)
   L.needLength = function (s, fast) {
-    fast = fast || 4.75;
-    const effPace = s.type === 'cotes' ? fast * 1.35 : fast;
-    let len = s.repDist || (s.repTime ? s.repTime / 60 / effPace * 1000 : 300);
+    const P = L.sessionPaces(s, null, fast);
+    const effPace = s.type === 'cotes' && !P.fromPlan.fast ? P.fast * 1.35 : P.fast;
+    let len = s.repList ? Math.max(...s.repList) : s.repDist || (s.repTime ? s.repTime / 60 / effPace * 1000 : 300);
     return Math.max(80, Math.min(1500, Math.round(len)));
   };
 
@@ -608,7 +721,13 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
       else if (r >= 0.7 && r <= 1.45) status = 'partial';
       else status = 'off';
     }
-    return { items, status, main: main ? main.key : null };
+    let pace = null;
+    const tgt = L.paceTarget(s), dp = done.pace ? L.parsePace(done.pace) : null;
+    if (tgt && dp) {
+      const tol = 5 / 60;
+      pace = { lo: tgt.lo, hi: tgt.hi, done: dp, ok: dp >= tgt.lo - tol && dp <= tgt.hi + tol, tooFast: dp < tgt.lo - tol, diff: dp < tgt.lo ? tgt.lo - dp : dp - tgt.hi };
+    }
+    return { items, status, main: main ? main.key : null, pace };
   };
 
   /* ------------------------------------------------------------ géométrie */
@@ -1093,14 +1212,20 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
   function typeOf(s) { return TYPES[s.type] || TYPES.autre; }
   function detailLine(s) {
     const p = [];
-    if (s.reps) {
+    const interval = T.isInterval(s);
+    if (s.repList) {
+      const mn = Math.min(...s.repList), mx = Math.max(...s.repList);
+      p.push(s.repList.length > 6 ? `${s.repList.length} fractions de ${mn} à ${mx} m` : s.repList.join('-') + ' m');
+    } else if (s.reps || s.repDist || s.repTime) {
       const eff = s.repDist ? `${s.repDist >= 1000 ? fmtKm(s.repDist / 1000) + ' km' : s.repDist + ' m'}` : T.fmtSec(s.repTime);
-      p.push(`${s.reps} × ${eff}`);
-      if (s.recTime) p.push(`récup ${T.fmtSec(s.recTime)}`);
+      p.push(s.reps ? `${s.reps} × ${eff}` : eff);
     }
+    if (interval && s.pace) p.push(`effort ${s.pace}/km`);
+    const rec = s.recTime ? T.fmtSec(s.recTime) : s.recDist ? `${s.recDist} m` : null;
+    if (rec) p.push(`récup ${rec}${interval && s.paceEasy ? ' à ' + T.fmtPace(s.paceEasy) + '/km' : ''}`);
     if (s.warmupMin) p.push(`échauff. ${s.warmupMin} min`);
     if (s.cooldownMin) p.push(`retour au calme ${s.cooldownMin} min`);
-    if (s.pace) p.push(`${s.pace}/km`);
+    if (!interval && s.pace) p.push(`allure ${s.pace}/km`);
     return p.join(' · ');
   }
   function statusChip(s) {
@@ -1279,13 +1404,22 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
   function cmpHTML(s) {
     if (!s.done) return '';
     const c = T.compare(s, s.done, S().easyPace, S().fastPace);
-    if (!c.items.length) return `<p class="muted small">Séance marquée comme faite.</p>`;
+    if (!c.items.length) return c.pace ? paceCheckHTML(c.pace, s.done) : `<p class="muted small">Séance marquée comme faite.</p>`;
     return `<div class="cmp">${c.items.map(i => {
       const pct = Math.round(i.ratio * 100);
       const col = i.ratio >= 0.88 && i.ratio <= 1.25 ? 'var(--green)' : i.ratio >= 0.7 ? 'var(--amber)' : 'var(--red)';
       const f = v => i.unit === 'km' ? fmtKm(v) + ' km' : i.unit === 'min' ? T.fmtMin(v) : Math.round(v) + ' m';
       return `<div class="row"><div class="l"><span>${i.key}</span><span><b>${f(i.done)}</b> / ${f(i.plan)} · ${pct} %</span></div><div class="track"><div class="fill" style="width:${clamp(pct, 3, 100)}%;background:${col}"></div></div></div>`;
-    }).join('')}${s.done.pace ? `<p class="small muted">Allure moyenne ${esc(s.done.pace)}/km${s.done.hr ? ` · FC moy. ${s.done.hr}` : ''}</p>` : ''}</div>`;
+    }).join('')}${paceCheckHTML(c.pace, s.done)}</div>`;
+  }
+  function paceCheckHTML(pc, done) {
+    if (pc) {
+      const tgt = pc.hi - pc.lo > 0.04 ? `${T.fmtPace(pc.lo)}–${T.fmtPace(pc.hi)}` : T.fmtPace(pc.lo);
+      const verdict = pc.ok ? '<b style="color:var(--green)">✓ dans la cible</b>'
+        : `<b style="color:var(--amber)">${pc.tooFast ? 'trop rapide' : 'plus lente'} de ${T.fmtSec(Math.round(pc.diff * 60))}</b>`;
+      return `<p class="small" style="margin:12px 0 0">Allure moyenne <b>${T.fmtPace(pc.done)}/km</b> · cible Kiprun ${tgt} · ${verdict}${pc.tooFast ? '<br><span class="muted">En endurance, courir plus lentement fait partie de l’entraînement.</span>' : ''}${done.hr ? `<br><span class="muted">FC moy. ${done.hr}</span>` : ''}</p>`;
+    }
+    return done.pace ? `<p class="small muted">Allure moyenne ${esc(done.pace)}/km${done.hr ? ` · FC moy. ${done.hr}` : ''}</p>` : '';
   }
   function openDetail(id) {
     const s = byId(id); if (!s) return;
@@ -1332,9 +1466,10 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
       <div class="grid2"><label class="field"><span>Échauffement (min)</span><input name="${p}warmupMin" inputmode="numeric" value="${v(s.warmupMin)}"></label>
       <label class="field"><span>Retour au calme (min)</span><input name="${p}cooldownMin" inputmode="numeric" value="${v(s.cooldownMin)}"></label></div>
       <div class="grid3"><label class="field"><span>Répétitions</span><input name="${p}reps" inputmode="numeric" value="${v(s.reps)}" placeholder="10"></label>
-      <label class="field"><span>Effort</span><input name="${p}effort" value="${s.repDist ? s.repDist + ' m' : s.repTime ? T.fmtSec(s.repTime) : ''}" placeholder="400 m ou 1'30"></label>
-      <label class="field"><span>Récup</span><input name="${p}recup" value="${s.recTime ? T.fmtSec(s.recTime) : ''}" placeholder="1'30"></label></div>
-      <label class="field"><span>Allure cible (/km)</span><input name="${p}pace" value="${v(s.pace)}" placeholder="5'30"></label>
+      <label class="field"><span>Effort</span><input name="${p}effort" value="${s.repList ? s.repList.join('-') + ' m' : s.repDist ? s.repDist + ' m' : s.repTime ? T.fmtSec(s.repTime) : ''}" placeholder="400 m, 1'30…"></label>
+      <label class="field"><span>Récup</span><input name="${p}recup" value="${s.recTime ? T.fmtSec(s.recTime) : s.recDist ? s.recDist + ' m' : ''}" placeholder="1'30 ou 100 m"></label></div>
+      <div class="grid2"><label class="field"><span>Allure cible /km</span><input name="${p}pace" value="${v(s.pace)}" placeholder="4'34 ou 7'11-7'44"></label>
+      <label class="field" data-easy><span>Allure récup /km</span><input name="${p}paceEasy" value="${s.paceEasy && T.isInterval(s) ? T.fmtPace(s.paceEasy) : ''}" placeholder="8'23"></label></div>
       <label class="field"><span>Consignes</span><textarea name="${p}notes">${v(s.notes)}</textarea></label>`;
   }
   function readEditor(root, base, p) {
@@ -1347,27 +1482,54 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
     s.distanceKm = num(g('distanceKm')); s.dplus = num(g('dplus'));
     s.warmupMin = num(g('warmupMin')); s.cooldownMin = num(g('cooldownMin')); s.reps = num(g('reps'));
     const eff = T.norm(g('effort'));
-    s.repDist = null; s.repTime = null;
-    if (eff) {
+    s.repDist = null; s.repTime = null; s.repList = null;
+    const nums = eff.match(/\d{2,4}/g);
+    if (eff && /-/.test(eff) && nums && nums.length >= 2) {
+      s.repList = nums.map(Number); s.repDist = Math.max(...s.repList); if (!s.reps) s.reps = s.repList.length;
+    } else if (eff) {
       const tk = T._tokenAt(eff.replace(/^(\d+)$/, (_, n) => +n >= 100 ? n + ' m' : n + '"'));
       if (tk && tk.kind === 'dist') s.repDist = tk.value; else if (tk) s.repTime = tk.value;
     }
-    const rc = T.parseDuration(g('recup')); s.recTime = rc != null ? Math.round(rc * 60) : null;
+    const rc = T.norm(g('recup')); s.recTime = null; s.recDist = null;
+    if (rc) {
+      const tk = T._tokenAt(rc.replace(/^(\d+)$/, (_, n) => +n >= 100 ? n + ' m' : n + '"'));
+      if (tk && tk.kind === 'dist') s.recDist = tk.value;
+      else if (tk) s.recTime = tk.value;
+      else { const d = T.parseDuration(rc); if (d != null) s.recTime = Math.round(d * 60); }
+    }
     s.pace = g('pace') || null; s.notes = g('notes') || null;
+    const r = T.parsePaceRange(s.pace);
+    s.paceFast = null; s.paceRange = null;
+    if (T.isInterval(s)) { if (r) s.paceFast = r.lo; s.paceEasy = T.parsePace(g('paceEasy')) || null; }
+    else { s.paceEasy = r ? (r.lo + r.hi) / 2 : null; if (r) s.paceRange = [r.lo, r.hi]; }
     return s;
   }
   function openEditor(s, isNew) {
     openSheet(`<h2>${isNew ? 'Nouvelle séance' : 'Modifier la séance'}</h2><form id="edForm" style="margin-top:12px">${editorFields(s)}
       <button class="btn primary block" type="submit">Enregistrer</button></form>
       ${s.rawText ? `<details><summary>Texte lu sur la capture</summary><pre>${esc(s.rawText)}</pre></details>` : ''}`, sh => {
+      const typeSel = $('[name=type]', sh), easyBox = $('[data-easy]', sh);
+      const syncEasy = () => { easyBox.style.display = /^(fractionne|cotes)$/.test(typeSel.value) ? '' : 'none'; };
+      typeSel.addEventListener('change', syncEasy); syncEasy();
       $('#edForm', sh).addEventListener('submit', e => {
         e.preventDefault();
         const ns = readEditor(sh, s);
         const i = state.sessions.findIndex(x => x.id === ns.id);
         if (i >= 0) state.sessions[i] = ns; else state.sessions.push(ns);
-        save(); closeSheet(); toast('Séance enregistrée'); refresh();
+        const adopted = isNew && adoptPaces([ns]);
+        save(); closeSheet(); toast(adopted ? 'Séance enregistrée · allures Kiprun reprises dans Réglages' : 'Séance enregistrée', adopted ? 4000 : 2800); refresh();
       });
     });
+  }
+
+  // Tant que les allures des Réglages sont celles par défaut, on reprend celles de Kiprun
+  function adoptPaces(list) {
+    const st = S(); let changed = false;
+    for (const x of list) {
+      if (st.easyPace === DEFAULTS.settings.easyPace && x.paceRange && x.paceEasy) { st.easyPace = Math.round(x.paceEasy * 60) / 60; changed = true; }
+      if (st.fastPace === DEFAULTS.settings.fastPace && T.isInterval(x) && x.paceFast) { st.fastPace = Math.round(x.paceFast * 60) / 60; changed = true; }
+    }
+    return changed;
   }
 
   /* ------------------------------------------------ lecture des captures */
@@ -1408,7 +1570,7 @@ details pre{white-space:pre-wrap;font-size:12px;background:var(--soft);padding:1
     const prompt = mode === 'plan'
       ? `Capture d'écran d'une app de plan d'entraînement course/trail (Kiprun Pacer). Aujourd'hui : ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${T.ymd(now)}).
 Extrais chaque séance visible. Convertis les dates relatives (Aujourd'hui, Demain, jours de la semaine) en dates. Réponds UNIQUEMENT avec ce JSON :
-{"sessions":[{"date":"YYYY-MM-DD"|null,"title":string,"type":"footing"|"sortie_longue"|"fractionne"|"cotes"|"seuil"|"recup"|"renfo"|"repos"|"autre","durationMin":number|null,"distanceKm":number|null,"dplus":number|null,"warmupMin":number|null,"cooldownMin":number|null,"reps":number|null,"repDist":number|null (mètres),"repTime":number|null (secondes),"recTime":number|null (secondes),"pace":"m'ss"|null,"notes":string (consignes en une ou deux phrases)}]}`
+{"sessions":[{"date":"YYYY-MM-DD"|null,"title":string,"type":"footing"|"sortie_longue"|"fractionne"|"cotes"|"seuil"|"recup"|"renfo"|"repos"|"autre","durationMin":number|null,"distanceKm":number|null,"dplus":number|null,"warmupMin":number|null,"cooldownMin":number|null,"reps":number|null,"repDist":number|null (mètres),"repTime":number|null (secondes),"repList":[mètres]|null (si les fractions ont des longueurs différentes, ex. pyramide),"recTime":number|null (secondes),"recDist":number|null (mètres),"pace":"m'ss" ou "m'ss-m'ss"|null (allure d'effort pour un fractionné, plage d'allure pour une séance continue),"paceEasy":"m'ss"|null (allure de récupération ou d'échauffement d'un fractionné),"notes":string (consignes en une ou deux phrases)}]}`
       : `Capture d'écran d'une activité de course (Garmin Connect). Réponds UNIQUEMENT avec ce JSON : {"distanceKm":number|null,"durationMin":number|null,"dplus":number|null (gain d'altitude en m),"pace":"m'ss"|null,"hr":number|null,"date":"YYYY-MM-DD"|null}. Aujourd'hui : ${T.ymd(now)}.`;
     const res = await fetchJSON(API.claude, {
       method: 'POST',
@@ -1466,7 +1628,10 @@ Extrais chaque séance visible. Convertis les dates relatives (Aujourd'hui, Dema
   }
   function normalizeSession(x) {
     const s = { id: uid() };
-    ['date', 'title', 'type', 'durationMin', 'distanceKm', 'dplus', 'warmupMin', 'cooldownMin', 'reps', 'repDist', 'repTime', 'recTime', 'pace', 'notes', 'rawText'].forEach(k => { if (x[k] != null && x[k] !== '') s[k] = x[k]; });
+    ['date', 'title', 'type', 'durationMin', 'distanceKm', 'dplus', 'warmupMin', 'cooldownMin', 'reps', 'repDist', 'repTime', 'repList', 'recTime', 'recDist', 'pace', 'paceFast', 'paceEasy', 'paceRange', 'notes', 'rawText'].forEach(k => { if (x[k] != null && x[k] !== '') s[k] = x[k]; });
+    if (typeof s.paceEasy === 'string') s.paceEasy = T.parsePace(s.paceEasy);
+    if (Array.isArray(s.repList) && s.repList.length) { s.reps = s.reps || s.repList.length; s.repDist = s.repDist || Math.max(...s.repList); } else delete s.repList;
+    if (s.pace && !s.paceFast && !s.paceRange) { const r = T.parsePaceRange(s.pace); if (r) { if (T.isInterval(s)) s.paceFast = r.lo; else { s.paceRange = [r.lo, r.hi]; s.paceEasy = s.paceEasy || (r.lo + r.hi) / 2; } } }
     if (!TYPES[s.type]) s.type = T.classify(T.norm((s.title || '') + ' ' + (s.notes || '')));
     if (!s.date) s.date = today();
     s.time = S().defaultTime;
@@ -1487,7 +1652,7 @@ Extrais chaque séance visible. Convertis les dates relatives (Aujourd'hui, Dema
       <button class="btn primary block" id="revAdd">Ajouter au planning</button>`, sh => {
       $('#revAdd', sh).onclick = () => {
         const keep = $$('input[type=checkbox]', sh).filter(c => c.checked).map(c => list[+c.dataset.i]);
-        keep.forEach(s => state.sessions.push(s)); save(); closeSheet();
+        keep.forEach(s => state.sessions.push(s)); adoptPaces(keep); save(); closeSheet();
         toast(`${keep.length} séance(s) ajoutée(s)`); refresh();
       };
     });
@@ -1812,7 +1977,7 @@ out geom qt;`;
     return {
       dist: m.distKm || 8, dplus: m.dplus || 0, time: (s && s.time) || S().defaultTime,
       len: s ? T.needLength(s, S().fastPace) : 300, hill: s ? s.type === 'cotes' : false,
-      warm: s && s.warmupMin ? Math.round(s.warmupMin / S().easyPace * 10) / 10 : 2,
+      warm: s && s.warmupMin ? Math.round(s.warmupMin / T.sessionPaces(s, S().easyPace, S().fastPace).easy * 10) / 10 : 2,
       date: s ? s.date : today(), durMin: m.durMin || 60,
     };
   }
@@ -1894,7 +2059,8 @@ out geom qt;`;
       const flags = weatherFlags(w, start);
       if (route.mode === 'loop') {
         if (!(f.dist > 0.5 && f.dist < 80)) throw new Error('Distance invalide');
-        const dur = Math.round((f.dist + (f.dplus || 0) / 100) * S().easyPace);
+        const easyP = s ? T.sessionPaces(s, S().easyPace, S().fastPace).easy : S().easyPace;
+        const dur = Math.round((f.dist + (f.dplus || 0) / 100) * easyP);
         const r = await generateLoops({ home: S().home, distKm: f.dist, dplus: f.dplus || 0, start, durMin: dur, heat: flags.heat, night: flags.night }, step);
         route.results = { kind: 'loop', items: r.routes, info: r.info, f };
       } else {
@@ -1958,7 +2124,7 @@ out geom qt;`;
           ${w.approach ? `<div class="small" style="margin-top:6px">Trajet depuis chez toi : <b>${fmtKm(w.approach.distance / 1000)} km</b> (ton échauffement)</div>` : ''}
           ${i === route.sel ? `<div class="actions"><button class="btn sm primary" data-a="approach">${w.approach ? 'Recalculer le trajet' : 'Trajet depuis chez moi'}</button><button class="btn sm" data-a="save">Garder</button><button class="btn sm" data-a="gpx">GPX</button>
           <a class="btn sm" href="https://maps.apple.com/?daddr=${w.A[0].toFixed(5)},${w.A[1].toFixed(5)}&dirflg=w" target="_blank" rel="noopener">Plans</a></div>
-          <p class="small muted" style="margin:8px 0 0">Fais tes efforts de A vers B${route.results.f.hill ? ' (en montée)' : ''}, récupère en revenant vers A.</p>` : ''}
+          <p class="small muted" style="margin:8px 0 0">${spotHint(s, route.results.f.hill)}</p>` : ''}
         </div></div>`;
       });
       if (bounds.length && map) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 17 });
@@ -1972,6 +2138,12 @@ out geom qt;`;
       if (e.target.closest('a')) return;
       if (route.sel !== i) { route.sel = i; showResults(); }
     }));
+  }
+  function spotHint(s, hill) {
+    const eff = s && s.pace && T.isInterval(s) ? ` à ${s.pace}/km` : '';
+    const rec = s && s.paceEasy && T.isInterval(s) ? ` à ${T.fmtPace(s.paceEasy)}/km` : '';
+    const list = s && s.repList ? ` (${s.repList.join('-')} m : arrête-toi avant B pour les plus courtes)` : '';
+    return `Fais tes efforts de A vers B${hill ? ' en montée' : ''}${eff}${list}, récupère en revenant vers A${rec}.`;
   }
   async function resultAction(act, item) {
     const s = route.sessionId ? byId(route.sessionId) : null;
@@ -2031,7 +2203,7 @@ out geom qt;`;
         <label class="field"><span>Endurance /km</span><input id="sEasy" value="${T.fmtPace(st.easyPace)}"></label>
         <label class="field"><span>Fractionné /km</span><input id="sFast" value="${T.fmtPace(st.fastPace)}"></label>
         <label class="field"><span>Heure habituelle</span><input id="sTime" type="time" value="${st.defaultTime}"></label></div>
-        <p class="small muted" style="margin:0">Servent à estimer distances et durées, et la longueur des lignes droites pour le fractionné.</p></div>
+        <p class="small muted" style="margin:0">Les allures lues sur tes captures Kiprun sont utilisées en priorité pour chaque séance. Celles-ci servent pour les sorties libres et les séances sans allure.</p></div>
       <div class="section">Itinéraires</div>
       <div class="card">
         <div class="toggle-row"><button class="btn sm ${st.router !== 'ors' ? 'on' : ''}" data-router="osrm">Standard (sans clé)</button><button class="btn sm ${st.router === 'ors' ? 'on' : ''}" data-router="ors">OpenRouteService</button></div>
